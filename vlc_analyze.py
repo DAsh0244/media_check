@@ -37,7 +37,9 @@ parser.add_argument('path', type=str, nargs='*', help='path of file(s) to be rea
 parser.add_argument('--extension', '-e', type=str, nargs='+',
                     help=('comma separated extension(s) to use for file(s) in directory provided\n'
                           'NOTE: As of now, only mp3 files support metadata editing'),
-                    default='mp3, wav, flac, ogg, mp4')
+                    default='mp3'
+                    # default='mp3, wav, flac, ogg, mp4'
+                    )
 parser.add_argument('--interact', '-i', action="store_true",
                     help='if enabled will allow for interactive prompts ' 
                          'before proceeding with modifying/removing files.'

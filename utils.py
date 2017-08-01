@@ -12,42 +12,57 @@ Description:
 """
 
 
-import rlcompleter
-import readline
-import ctypes as _ctypes
-import glob as _glob
-import itertools as _it
+# import rlcompleter
+# import readline
+
 import os as _os
 import sys as _sys
+import vlc as _vlc
+import glob as _glob
 import time as _time
+import itertools as _it
+import ctypes as _ctypes
+import urllib.request as urllib
 
 from metadata import Metadata
 from interpreter import (
-    HideUndocumentedInterpreter,
-    # AliasedInterpreter,
-    AliasCmdInterpreter
-                    )
+                          # AliasedMix,
+                          TimeoutInputMix,
+                          AliasCmdInterpreter,
+                          HideUndocumentedInterpreter,
+                        )
 
 __version__ = '0.1'
 
-readline.parse_and_bind("tab: complete")
+HORIZ_LINE = 78 * '-'
+
+# readline.parse_and_bind("tab: complete")
 
 if _sys.platform.startswith('win'):
-    import msvcrt as _msvcrt
+    from msvcrt import getch, kbhit
     from string import printable as _printable
-    _special_key_sig = {0, b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
-    # _special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
+    special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
+    # special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
 
-    # todo: thing to implement: arrow key support, delete key support, tab support, readline support
-    _printable = _printable.replace('\t', '')
+    # todo: things to implement: delete/tab/esc/arrow-key support, readline support
+    # http://help.adobe.com/en_US/AS2LCR/Flash_10.0/help.html?content=00000520.html
+    printable = _printable.replace('\t', '')
 
     def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out'):
-        start_time = _time.time()
+        """
 
+        :param caption:
+        :param timeout:
+        :param default:
+        :param stream:
+        :param timeout_msg:
+        :return:
+        """
         def write_flush(string):
             stream.write(string)
             stream.flush()
 
+        start_time = _time.time()
         if default == '':
             write_flush('{}'.format(caption))
         else:
@@ -55,10 +70,10 @@ if _sys.platform.startswith('win'):
         input_string = ''
         byte_arr = bytearray()
         while True:
-            if _msvcrt.kbhit():
-                char = _msvcrt.getch()
-                if ord(char) in _special_key_sig:  # if special key, get extra byte and merge
-                    tmp = _msvcrt.getch()
+            if kbhit():
+                char = getch()
+                if ord(char) in special_key_sig:  # if special key, get extra byte and merge
+                    tmp = getch()
                     char = bytes(ord(char) + (ord(tmp) << 8))
                     # print(char)
                 if char == b'\r':  # enter_key
@@ -72,7 +87,7 @@ if _sys.platform.startswith('win'):
                         write_flush('\b  \b\b')
                     except IndexError:
                         pass
-                elif str(char, 'utf-8') in _printable:  # printable character
+                elif str(char, 'utf-8') in printable:  # printable character
                     byte_arr.append(ord(char))
                     write_flush(str(char, 'utf-8'))
 
@@ -86,59 +101,57 @@ if _sys.platform.startswith('win'):
         else:
             return default
 
-    # def keypress():
-    #     """
-    #     Waits for the user to press a key. Returns the ascii code
-    #     for the key pressed or zero for a function key pressed.
-    #     """
-    #     import msvcrt
-    #     while 1:
-    #         if msvcrt.kbhit():  # Key pressed?
-    #             a = ord(msvcrt.getch())  # get first byte of keyscan code
-    #             if a == 0 or a == 224:  # is it a function key?
-    #                 msvcrt.getch()  # discard second byte of key scan code
-    #                 return 0  # return 0
-    #             else:
-    #                 return a  # else return ascii code
-    #
-    #
-    # def funkeypress():
-    #     """
-    #     Waits for the user to press any key including function keys. Returns
-    #     the ascii code for the key or the scancode for the function key.
-    #     """
-    #     import msvcrt
-    #     while 1:
-    #         if msvcrt.kbhit():  # Key pressed?
-    #             a = ord(msvcrt.getch())  # get first byte of keyscan code
-    #             if a == 0 or a == 224:  # is it a function key?
-    #                 b = ord(msvcrt.getch())  # get next byte of key scan code
-    #                 x = a + (b * 256)  # cook it.
-    #                 return x  # return cooked scancode
-    #             else:
-    #                 return a  # else return ascii code
-    #
-    #
-    # def anykeyevent():
-    #     """
-    #     Detects a key or function key pressed and returns its ascii or scancode.
-    #     """
-    #     import msvcrt
-    #     if msvcrt.kbhit():
-    #         a = ord(msvcrt.getch())
-    #         if a == 0 or a == 224:
-    #             b = ord(msvcrt.getch())
-    #             x = a + (b * 256)
-    #             return x
-    #         else:
-    #             return a
-
-
+            # def keypress():
+            #     """
+            #     Waits for the user to press a key. Returns the ascii code
+            #     for the key pressed or zero for a function key pressed.
+            #     """
+            #     import msvcrt
+            #     while 1:
+            #         if msvcrt.kbhit():  # Key pressed?
+            #             a = ord(msvcrt.getch())  # get first byte of keyscan code
+            #             if a == 0 or a == 224:  # is it a function key?
+            #                 msvcrt.getch()  # discard second byte of key scan code
+            #                 return 0  # return 0
+            #             else:
+            #                 return a  # else return ascii code
+            #
+            #
+            # def funkeypress():
+            #     """
+            #     Waits for the user to press any key including function keys. Returns
+            #     the ascii code for the key or the scancode for the function key.
+            #     """
+            #     import msvcrt
+            #     while 1:
+            #         if msvcrt.kbhit():  # Key pressed?
+            #             a = ord(msvcrt.getch())  # get first byte of keyscan code
+            #             if a == 0 or a == 224:  # is it a function key?
+            #                 b = ord(msvcrt.getch())  # get next byte of key scan code
+            #                 x = a + (b * 256)  # cook it.
+            #                 return x  # return cooked scancode
+            #             else:
+            #                 return a  # else return ascii code
+            #
+            #
+            # def anykeyevent():
+            #     """
+            #     Detects a key or function key pressed and returns its ascii or scancode.
+            #     """
+            #     import msvcrt
+            #     if msvcrt.kbhit():
+            #         a = ord(msvcrt.getch())
+            #         if a == 0 or a == 224:
+            #             b = ord(msvcrt.getch())
+            #             x = a + (b * 256)
+            #             return x
+            #         else:
+            #             return a
 elif _sys.platform.startswith('linux'):
     import select as _select
 
 
-    def read_input(prompt, timeout):
+    def input_timeout(prompt, timeout):
         _sys.stdout.write(prompt)
         _sys.stdout.flush()
         ready, _, _ = _select.select([_sys.stdin], [], [], timeout)
@@ -153,8 +166,165 @@ class TimeoutExpired(Exception):
     """timeout occurred"""
 
 
-# class MdataShell(AliasedShell, HideUndocumentedShell):
-class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
+class MediaError(Exception):
+    """raised when media fails to be loaded/processed"""
+
+
+class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputMix):
+    # intro = 'now_playing: '
+    prompt = '> '
+    doc_header = 'Commands (type help/? <topic>):'
+    misc_header = 'Reference/help guides (type help/? <topic>):'
+
+    def do_echo(self, args):
+        self.stdout.write(args + '\n')
+        self.stdout.flush()
+        if args == 'stop':
+            return True
+
+    def __init__(self, media_files, interact=False, *args, parent=None, **kwargs):
+        super(AudioShell, self).__init__(*args, **kwargs)
+        self.file_list = iter(media_files)
+        self.player_instance = _vlc.Instance()
+        self.interactive = interact
+        self.player = self.player_instance.media_player_new()
+
+        try:
+            file = next(self.file_list)
+            media = self.player_instance.media_new(file)
+            self.player.set_media(media)
+            self.metadata = Metadata(file)
+            self.timeout = self.metadata.get_audio_length() - .5
+            self.prompt = '{}> '.format(_os.path.basename(file)[:30])
+            self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
+        except StopIteration:
+            raise MediaError('Empty file list provided.')
+
+    # audio_set_volume(self, i_volume) # (0 = mute, 100 = 0dB). ret 0 on sucess, -1 if out of range
+    # audio_get_volume(self)
+    # audio_get_track_count
+    # audio_get_track (ret track ID )
+    # audio_set_track (i_id field from track description)
+    # audio_set_mute (bool)
+    # audio_get_mute (bool)
+    # audio_toggle_mute
+    # pause
+    # stop
+    # play
+    # set_pause # toggle pause/resume
+    # get_media
+    # set_media
+
+    def preloop(self):
+        self.player.play()
+        file = urllib.unquote(self.player.get_media().get_mrl())[8:]
+        md = self.metadata.get_audio_metadata(['artist', 'title'])
+        self.stdout.write('{}\n'
+                          'playing: {}\n'
+                          'Title: {}\n'
+                          'Artist: {}\n'
+                          'Path: {}\n'.format(HORIZ_LINE,
+                                              _os.path.basename(file),
+                                              *md,
+                                              _os.path.abspath(file)
+                                              )
+                          )
+        self.stdout.flush()
+        _time.sleep(.2)
+        # return self.postcmd(None, '')
+
+    # noinspection PyUnusedLocal
+    def postcmd(self, stop, line):
+        if stop:
+            return True
+        if not self.player.is_playing():
+            return self.next_track()
+
+    def next_track(self):
+        try:
+            self.player.stop()
+            file = next(self.file_list)
+            media = self.player_instance.media_new(file)
+            self.player.set_media(media)
+            self.metadata = Metadata(file)
+            self.prompt = '{}> '.format(_os.path.basename(file)[:30])
+            self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
+            self.timeout = self.metadata.get_audio_length() - .5
+            self.player.play()
+            md = self.metadata.get_audio_metadata(['artist', 'title'])
+            self.stdout.write('{}\n'
+                              'playing: {}\n'
+                              'Title: {}\n'
+                              'Artist: {}\n'
+                              'Path: {}\n'.format(HORIZ_LINE,
+                                                  _os.path.basename(file),
+                                                  *md,
+                                                  _os.path.abspath(file)
+                                                  )
+                              )
+            self.stdout.flush()
+            _time.sleep(.2)
+            return False
+        except StopIteration:
+            self.cleanup()
+            return True
+
+    def do_edit(self, *args):
+        self.mdatashell.cmdloop()
+
+    def do_delete(self, *args):
+        self.player.stop()
+        file_path = urllib.unquote(self.player.get_media().get_mrl())[8:]
+        if self.interactive:
+            confirm = input('Really delete? (y/n): ')
+            if 'y' == confirm.rstrip().lower():
+                _os.remove(file_path)
+                self.next_track()
+        else:
+            _os.remove(file_path)
+            self.next_track()
+
+    def cleanup(self):
+        self.file_list = []
+        self.player.stop()
+        self.player_instance.release()
+
+    # noinspection PyUnusedLocal
+    def do_quit(self, *args):
+        self.cleanup()
+
+    def do_skip(self, duration=''):
+            if not duration:
+                duration = 30.0
+            calc_pos = (float(duration) / self.metadata.get_audio_length()) + self.player.get_position()
+            if calc_pos > 1:
+                self.player.stop()
+                _time.sleep(0.1)
+            elif calc_pos < 0:
+                self.player.set_position(0)
+            else:
+                self.player.set_position(calc_pos)
+
+    def do_bookmark(self, *args):
+        pass
+
+    def do_next_track(self, *args):
+        self.next_track()
+
+    # internal masking:
+    do_EOF = do_quit
+
+    # aliased commmands
+    alias_d = do_delete
+    alias_e = do_edit
+    alias_q = do_quit
+    alias_s = do_skip
+    alias_b = do_bookmark
+    alias_n = do_next_track
+    alias_next = do_next_track
+
+
+class MetaDataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
     __doc__ = ('version: {}\n'
                'Metadata Shell for interacting with MetaData objects.\n'
                ''.format(__version__)
@@ -166,21 +336,21 @@ class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
     # ruler = '-'
 
     def __init__(self, mdata: Metadata, *args, parent=None, view=None, **kwargs):
-        super(MdataShell, self).__init__(*args, **kwargs)
+        super(MetaDataShell, self).__init__(*args, **kwargs)
         self.meta = mdata
         self.intro += mdata.file
-        # self.intro = '{}"{}"'.format(self.intro, mdata.file)
+
+        # handle nesting shells
         if parent is not None:
-            self.prompt = ' -> '.join([parent.prompt.strip(), self.prompt])
+            self.prompt = ' -> '.join([parent.prompt.strip()[:30], self.prompt])
         self.tmp_dict = mdata.tags
 
+        # optional view avaible metadata on shell startup.
         if view is not None:
             self.intro += '\n{}'.format(self.do_view(supress=True))
 
     # def emptyline(self):
     #     pass
-
-    # noinspection PyUnusedLocal,PyPep8Naming
 
     @staticmethod
     def do_cancel(*args):
@@ -197,28 +367,27 @@ class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
         return True
 
     # noinspection PyUnusedLocal
-    def do_view_dict(self, *args):
-        # """
-        # debug option
-        # """
-        self.stdout.write('\ntemp dict\n')
-        for key in self.tmp_dict:
-            self.stdout.write('{}: {}\n'.format(key, self.tmp_dict[key]))
+    # def do_view_dict(self, *args):
+    #     # """
+    #     # debug option
+    #     # """
+    #     self.stdout.write('\ntemp dict\n')
+    #     for key in self.tmp_dict:
+    #         self.stdout.write('{}: {}\n'.format(key, self.tmp_dict[key]))
+    #
+    #     self.stdout.write('\nactual dict\n')
+    #
+    #     for key in self.meta.audio:
+    #         self.stdout.write('{}: {}\n'.format(key, self.meta.audio[key]))
+    #
+    #     if 'save' in args:
+    #         self.do_save()
+    #         self.stdout.write('\nactual dict after merge\n')
+    #
+    #         for key in self.meta.audio:
+    #             self.stdout.write('{}: {}\n'.format(key, self.meta.audio[key]))
 
-        self.stdout.write('\nactual dict\n')
-
-        for key in self.meta.audio:
-            self.stdout.write('{}: {}\n'.format(key, self.meta.audio[key]))
-
-        if 'save' in args:
-            self.do_save()
-            self.stdout.write('\nactual dict after merge\n')
-
-            for key in self.meta.audio:
-                self.stdout.write('{}: {}\n'.format(key, self.meta.audio[key]))
-
-
-            # noinspection PyUnusedLocal
+    # noinspection PyUnusedLocal
     def do_save(self, *args):
         """
         Save current metadata tags to current file.
@@ -253,7 +422,8 @@ class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
                 except KeyError:
                     self.stdout.write('No such field {}\n'.format(arg))
         elif supress:
-            return ''.join('{:>15}: {}\n'.format(key, self.tmp_dict[key][0]) for key in self.tmp_dict)
+            return ''.join('{:>15}: {}\n'.format(key, self.tmp_dict[key][0])
+                           for key in self.tmp_dict if self.tmp_dict[key][0] != '')
         else:
             for key in self.tmp_dict:
                 if self.tmp_dict[key][0] != '':
@@ -274,6 +444,7 @@ class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
             self.tmp_dict = self.meta.tags
         else:
             self.meta.update(self.tmp_dict)
+            self.intro = 'Metadata for: {}\n{}'.format(_os.path.basename(self.meta.file), self.do_view(supress=True))
             # self.tmp_dict = {k: v for k, v in self.tmp_dict.items() if v[0] != ''}
         return True
 
@@ -308,13 +479,16 @@ class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
         else:
             return [i for i in self.meta.possible_tags if i.startswith(text)]
 
-    # noinspection PyUnusedLocal
-    def help_tutorial(self, *args):
-        self.stdout.write(self.__doc__)
+    # # noinspection PyUnusedLocal
+    # def help_tutorial(self, *args):
+    #     self.stdout.write(self.__doc__)
 
     # noinspection PyUnusedLocal,PyPep8Naming
     def do_EOF(self, *args):
-        return  self.do_cancel()
+        return self.do_cancel()
+
+    def update_prompt(self, new_prompt):
+        self.prompt = '{} -> Metadata: '.format(new_prompt)
 
     # internal masking -- not aliased
     complete_view = complete_edit
@@ -327,6 +501,7 @@ class MdataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
     alias_c = do_cancel
 
 
+# todo: support multiple bookmarks
 class BookMark:
     BOOKMARK_FILE = 'vlc_analyze_bookmarks.txt'
     bookmark_path = _os.path.join(_os.path.dirname(_os.path.realpath(__file__)),
@@ -378,6 +553,7 @@ class BookMark:
         BookMark.bookmark_file(None)
 
 
+# misc util functions
 def split_comma_str(comma_str):
     return [item for item in comma_str.replace(' ', '').split(',')]
 
@@ -385,10 +561,10 @@ def split_comma_str(comma_str):
 def multiple_file_types(path, patterns, recursion=False):
     if recursion:
         files = (_glob.iglob(_os.path.abspath(_os.path.join(path, './**/*.{}'.format(pattern))), recursive=recursion)
-                 for
-                 pattern in patterns)
+                 for pattern in patterns)
     else:
-        files = (_glob.iglob(_os.path.abspath(_os.path.join(path, '*.{}'.format(pattern)))) for pattern in patterns)
+        files = (_glob.iglob(_os.path.abspath(_os.path.join(path, '*.{}'.format(pattern))))
+                 for pattern in patterns)
     return _it.chain.from_iterable(files)
 
 
@@ -399,25 +575,39 @@ if __name__ == '__main__':
     from glob import glob
     from random import choice
 
-    val = input_timeout('this is a test for 5 second timer.', 5)
-    print(val)
+    f = open(os.devnull, 'w')
+    sys.stderr = f
 
-    def rand_track(clean=False):
-        source_dir = os.path.join(os.curdir, 'ref', 'music', '**')
-        tmp_dir = os.path.join(os.curdir, 'ref', 'temp')
-        fetched_track = choice(glob(os.path.join(source_dir, '*.mp3'), recursive=True))
-        dup = os.path.isfile(os.path.join(tmp_dir, os.path.basename(fetched_track)))
-        if dup and not clean:
-            return dup
+    # val = input_timeout('this is a test for 5 second timer.', 5)
+    # print(val)
+
+    src_dir = os.path.join(os.curdir, 'ref', 'music')
+    tmp_dir = os.path.join(os.curdir, 'ref', 'temp')
+    ext = 'mp3'
+
+    def rand_track(source_dir, temp_dir, extension, clean=False, recur=True):
+        fetched_track = choice(glob(os.path.join(source_dir, '**', '*.{}'.format(extension)), recursive=recur))
+        tmp = os.path.join(temp_dir, os.path.basename(fetched_track))
+        if os.path.isfile(tmp) and not clean:
+            return tmp
         else:
-            if not os.path.isdir(tmp_dir):
-                os.mkdir(tmp_dir)
-            local = os.path.join(tmp_dir, '{}_tmp{}'.format(*os.path.splitext(os.path.basename(fetched_track))))
+            if not os.path.isdir(temp_dir):
+                os.mkdir(temp_dir)
+            local = os.path.join(temp_dir, '{}_tmp{}'.format(*os.path.splitext(os.path.basename(fetched_track))))
             shutil.copy(fetched_track, local)
             return local
 
     # par = MdataShell(Metadata(rand_track()), view=True)
     # shell = MdataShell(Metadata(rand_track()), view=True, parent=par)
-    shell = MdataShell(Metadata(rand_track()), view=False)
+    shell = MetaDataShell(Metadata(rand_track(src_dir, tmp_dir, ext)), view=False)
+    # shell.cmdloop()
+
+    file_list = []
+    for i in range(3):
+        file_list.append(rand_track(src_dir, tmp_dir, ext))
+
+    shell = AudioShell(file_list, interact=True)
     shell.cmdloop()
+
+    f.close()
     sys.exit(0)

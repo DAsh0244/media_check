@@ -26,6 +26,7 @@ class Metadata:
                     '(q)uit to exit\n'
                     )
 
+    # list of some possible ID3 tags -- from mutagen's easyid3.py
     possible_tags = {"album",
                      "bpm",
                      "compilation",  # iTunes extension
@@ -53,9 +54,8 @@ class Metadata:
                      "titlesort",
                      "isrc",
                      "discsubtitle",
-                     "language"
+                     "language",
                      }
-
 
     def __init__(self, afile=None):
         self.file = _os.path.basename(afile)
