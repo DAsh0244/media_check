@@ -18,12 +18,19 @@ import time as _time
 from cmd import Cmd as _Cmd
 
 
-# misc functions / deorators
-
-
+# misc functions / decorators
 if _sys.platform.startswith('win'):
     from msvcrt import getch, kbhit
     from string import printable as _printable
+
+    import rlcompleter
+    import readline
+
+    old_completer = readline.get_completer()
+    completer = rlcompleter.Completer()
+    readline.set_completer(completer)
+    readline.parse_and_bind("tab: complete")
+
     special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
     # special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
 
@@ -32,34 +39,59 @@ if _sys.platform.startswith('win'):
     printable = _printable.replace('\t', '')
 
     def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out'):
-
         def write_flush(string):
             stream.write(string)
             stream.flush()
+
         start_time = _time.time()
         if default == '':
             write_flush('{}'.format(caption))
         else:
             write_flush('{}({}):'.format(caption, default))
+        try:
+            tmp_str = str(input_timeout.partial, 'utf-8')
+            byte_arr = bytearray(input_timeout.partial)
+            write_flush(tmp_str)
+        except AttributeError:
+            byte_arr = bytearray()
         input_string = ''
-        byte_arr = bytearray()
         while True:
             if kbhit():
                 char = getch()
                 if ord(char) in special_key_sig:  # if special key, get extra byte and merge
                     tmp = getch()
                     char = bytes(ord(char) + (ord(tmp) << 8))
-                    # print(char)
                 if char == b'\r':  # enter_key
                     input_string = str(byte_arr, 'utf-8')
-                    # stream.write('\nEntered: {}\n'.format(input_string))
-                    # stream.flush()
+                    input_timeout.partial = b''
                     break
                 elif char == b'\b':  # backspace_key
                     try:
                         byte_arr.pop()
                         write_flush('\b  \b\b')
                     except IndexError:
+                        pass
+                elif char == b'\t':
+                    try:
+                        phrase = str(byte_arr, 'utf-8')
+                        terms = []
+                        for idx in range(_sys.maxsize):
+                            term = completer.complete(phrase, idx)
+                            if term is None:
+                                break
+                            terms.append(term)
+                        if terms:
+                            if len(terms) == 1:
+                                partial = terms[0][len(phrase):]
+                                byte_arr.extend(bytearray(partial, 'utf-8'))
+                                write_flush(partial)
+                            else:
+                                complete_txt = '  '.join([term for term in terms])
+                                write_flush('\n' + complete_txt)
+                                input_timeout.partial = byte_arr
+                                break
+                    except Exception as e:
+                        print(e)
                         pass
                 elif str(char, 'utf-8') in printable:  # printable character
                     byte_arr.append(ord(char))
@@ -74,53 +106,8 @@ if _sys.platform.startswith('win'):
             return input_string
         else:
             return default
+    input_timeout.partial = b''
 
-            # def keypress():
-            #     """
-            #     Waits for the user to press a key. Returns the ascii code
-            #     for the key pressed or zero for a function key pressed.
-            #     """
-            #     import msvcrt
-            #     while 1:
-            #         if msvcrt.kbhit():  # Key pressed?
-            #             a = ord(msvcrt.getch())  # get first byte of keyscan code
-            #             if a == 0 or a == 224:  # is it a function key?
-            #                 msvcrt.getch()  # discard second byte of key scan code
-            #                 return 0  # return 0
-            #             else:
-            #                 return a  # else return ascii code
-            #
-            #
-            # def funkeypress():
-            #     """
-            #     Waits for the user to press any key including function keys. Returns
-            #     the ascii code for the key or the scancode for the function key.
-            #     """
-            #     import msvcrt
-            #     while 1:
-            #         if msvcrt.kbhit():  # Key pressed?
-            #             a = ord(msvcrt.getch())  # get first byte of keyscan code
-            #             if a == 0 or a == 224:  # is it a function key?
-            #                 b = ord(msvcrt.getch())  # get next byte of key scan code
-            #                 x = a + (b * 256)  # cook it.
-            #                 return x  # return cooked scancode
-            #             else:
-            #                 return a  # else return ascii code
-            #
-            #
-            # def anykeyevent():
-            #     """
-            #     Detects a key or function key pressed and returns its ascii or scancode.
-            #     """
-            #     import msvcrt
-            #     if msvcrt.kbhit():
-            #         a = ord(msvcrt.getch())
-            #         if a == 0 or a == 224:
-            #             b = ord(msvcrt.getch())
-            #             x = a + (b * 256)
-            #             return x
-            #         else:
-            #             return a
 elif _sys.platform.startswith('linux'):
     import select as _select
 
@@ -170,7 +157,7 @@ class HideNoneDocMix(_Cmd):
             super(HideNoneDocMix, self).print_topics(header, cmds, cmdlen, maxcol)
 
 
-class AliasedMix(_Cmd):
+class AliasMix(_Cmd):
     """
     interpreter that allows aliasing or commands using the alias_prefix
     """
@@ -178,7 +165,7 @@ class AliasedMix(_Cmd):
 
     def __init__(self, *args, **kwargs):
         self.aliases = self.get_aliases()
-        super(AliasedMix, self).__init__(*args, **kwargs)
+        super(AliasMix, self).__init__(*args, **kwargs)
 
     # noinspection PyUnusedLocal
     def completedefault(self, text, line, begidx, endidx):
@@ -188,17 +175,20 @@ class AliasedMix(_Cmd):
         return [a[3:] for a in self.get_names() if
                 (a.startswith('do_' + text) and getattr(self, a).__doc__ is not None)]
 
+    def get_names(self):
+        return dir(self)
+
     def get_aliases(self):
         return {i[6:] for i in self.get_names() if i.startswith(self.ALIAS_PREFIX)}
 
     def default(self, line):
         cmd, arg, line = self.parseline(line)
         func = [getattr(self, n) for n in self.get_names() if
-                (n.startswith('do_' + cmd)) or (n.startswith(self.ALIAS_PREFIX + cmd))]
+                (n == 'do_' + cmd) or (n == self.ALIAS_PREFIX + cmd)]
         if func:  # maybe check if exactly one or more elements, and tell the user
             return func[0](arg)
         else:
-            super(AliasedMix, self).default(line)
+            super(AliasMix, self).default(line)
             return None
 
     def complete(self, text, state):
@@ -237,27 +227,17 @@ class AliasedMix(_Cmd):
 
 
 class TimeoutInputMix(_Cmd):
-
+    """
+    mixin for timeout supported input methods
+    """
     def __init__(self, timeout=None, *args, **kwargs):
         super(TimeoutInputMix, self).__init__(*args, **kwargs)
         self.timeout = timeout
 
-    def cmdloop(self, timeout=None, intro=None):
+    def cmdloop(self, timeout=None, intro=None, timeout_msg=''):
         """
         modified cmdloop method of the Cmd class supporting input with timeouts.
-
-        Repeatedly issue a prompt, accept input, parse an initial prefix
-        off the received input, and dispatch to action methods, passing them
-        the remainder of the line as argument.
         """
-
-        if timeout is not None:
-            get_input = lambda prompt: input_timeout(caption=prompt, timeout=timeout, stream=self.stdout)
-        elif self.timeout is not None:
-            get_input = lambda prompt: input_timeout(caption=prompt, timeout=self.timeout, stream=self.stdout)
-        else:
-            get_input = lambda prompt: input(prompt)
-
         self.preloop()
         if self.use_rawinput and self.completekey:
             try:
@@ -281,6 +261,16 @@ class TimeoutInputMix(_Cmd):
                 else:
                     if self.use_rawinput:
                         try:
+                            try:
+                                if timeout is not None:
+                                    tout = timeout
+                                elif self.timeout:
+                                    tout = self.timeout
+
+                                get_input = lambda prompt: input_timeout(caption=prompt, timeout=tout,
+                                                                         stream=self.stdout, timeout_msg=timeout_msg)
+                            except:
+                                get_input = lambda prompt: input(prompt)
                             line = get_input(self.prompt)
                         except EOFError:
                             line = 'EOF'
@@ -321,7 +311,7 @@ class HideUndocumentedInterpreter(HideNoneDocMix):
         super(HideUndocumentedInterpreter, self).__init__(*args, **kwargs)
 
 
-class AliasCmdInterpreter(AliasedMix):
+class AliasCmdInterpreter(AliasMix):
     """
     AliasedShell with generally implemented command 'alias' that lists all aliases.
     'alias' has also been mapped to 'a'
@@ -340,12 +330,30 @@ class AliasCmdInterpreter(AliasedMix):
         Options:
         []
         """
-        alias_str = ''.join('{}: {}\n'.format(alias, getattr(self, 'alias_' + alias).__name__[3:])
-                            for alias in self.aliases)
-        if not supress:
-            self.stdout.write(alias_str)
+        if args[0] != '':
+            args = args[0].split(' ')
+            cmd = None
+            try:
+                cmd = getattr(self, 'do_{}'.format(args[1]))
+            except (AttributeError, IndexError):
+                try:
+                    cmd = getattr(self, '{}{}'.format(self.ALIAS_PREFIX, args[1]))
+                except (AttributeError, IndexError):
+                    pass
+            if cmd is not None:
+                setattr(self, '{}{}'.format(self.ALIAS_PREFIX, args[0]), cmd)
+                self.aliases = self.get_aliases()
+            else:
+                self.stdout.write('failed to create alias.\n')
+                self.stdout.flush()
+
         else:
-            return alias_str
+            alias_str = ''.join('{}: {}\n'.format(alias, getattr(self, 'alias_' + alias).__name__[3:])
+                                for alias in self.aliases)
+            if not supress:
+                self.stdout.write(alias_str)
+            else:
+                return alias_str
 
     # aliased cmds
     alias_a = do_alias

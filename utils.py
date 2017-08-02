@@ -12,9 +12,6 @@ Description:
 """
 
 
-# import rlcompleter
-# import readline
-
 import os as _os
 import sys as _sys
 import vlc as _vlc
@@ -32,15 +29,91 @@ from interpreter import (
                           HideUndocumentedInterpreter,
                         )
 
-__version__ = '0.1'
+__version__ = '0.2'
+
+# constants
 
 HORIZ_LINE = 78 * '-'
+BOOKMARK_FILE = 'vlc_analyze_bookmarks.txt'
+BOOKMARK_PATH = _os.path.join(_os.path.dirname(_os.path.realpath(__file__)),
+                              BOOKMARK_FILE)
 
-# readline.parse_and_bind("tab: complete")
+# util functions
+
+
+def write_hidden(file_name, data):
+    """
+    Cross platform hidden file writer.
+    """
+    # noinspection PyPep8Naming
+    FILE_ATTRIBUTE_HIDDEN = 0x02
+    win_set_attribute_func = _ctypes.windll.kernel32.SetFileAttributesW
+    # For *nix add a '.' prefix.
+    prefix = '.' if _os.name != 'nt' else ''
+    file_name = prefix + file_name
+
+    # Write file.
+    with open(file_name, 'w') as f:
+        f.write(data)
+
+    # For windows set file attribute.
+    if _os.name == 'nt':
+        ret = win_set_attribute_func(file_name, FILE_ATTRIBUTE_HIDDEN)
+        if not ret:  # There was an error.
+            raise _ctypes.WinError()
+
+
+def load_bookmarks(path=BOOKMARK_PATH):
+    bkmarks = set()
+    try:
+        with open(path, 'r') as bkfile:
+            for line in bkfile:
+                if _os.path.isfile(line):
+                    bkmarks.add(line.rstrip())
+        # bkmarks = set(filter(None, bkmarks))
+        # bkmarks = set(filter(_os.path.isfile, bkmarks))
+    except FileNotFoundError:
+        write_hidden(path, '')
+    finally:
+        return bkmarks
+
+
+def bookmark_file(media_file, path=BOOKMARK_PATH):
+    with open(path, 'a') as bkfile:
+            bkfile.write('{}\n'.format(media_file))
+
+
+def clear_marks(path=BOOKMARK_PATH):
+    with open(path, 'r+') as bkfile:
+        bkfile.truncate()
+
+
+def split_comma_str(comma_str):
+    return [item for item in comma_str.replace(' ', '').split(',')]
+
+
+def multiple_file_types(path, patterns, recursion=False):
+    if recursion:
+        files = (_glob.iglob(_os.path.abspath(_os.path.join(path, './**/*.{}'.format(pattern))), recursive=recursion)
+                 for pattern in patterns)
+    else:
+        files = (_glob.iglob(_os.path.abspath(_os.path.join(path, '*.{}'.format(pattern))))
+                 for pattern in patterns)
+    return _it.chain.from_iterable(files)
+
 
 if _sys.platform.startswith('win'):
     from msvcrt import getch, kbhit
     from string import printable as _printable
+
+    import rlcompleter
+    import readline
+
+    old_completer = readline.get_completer()
+    completer = rlcompleter.Completer()
+    readline.set_completer(completer)
+    readline.parse_and_bind("tab: complete")
+
     special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
     # special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
 
@@ -49,15 +122,6 @@ if _sys.platform.startswith('win'):
     printable = _printable.replace('\t', '')
 
     def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out'):
-        """
-
-        :param caption:
-        :param timeout:
-        :param default:
-        :param stream:
-        :param timeout_msg:
-        :return:
-        """
         def write_flush(string):
             stream.write(string)
             stream.flush()
@@ -86,6 +150,17 @@ if _sys.platform.startswith('win'):
                         byte_arr.pop()
                         write_flush('\b  \b\b')
                     except IndexError:
+                        pass
+                elif char == b'\t':
+                    try:
+                        phrase = str(byte_arr, 'utf-8')
+                        for idx in range(_sys.maxsize):
+                            term = completer.complete(phrase, idx)
+                            if term is None:
+                                continue
+                            byte_arr.extend([char for char in term])
+                            write_flush(term)
+                    except:
                         pass
                 elif str(char, 'utf-8') in printable:  # printable character
                     byte_arr.append(ord(char))
@@ -157,17 +232,9 @@ elif _sys.platform.startswith('linux'):
         ready, _, _ = _select.select([_sys.stdin], [], [], timeout)
         if ready:
             return _sys.stdin.readline().rstrip('\n')  # expect stdin to be line-buffered
-        raise TimeoutExpired
+        return ''
 else:
-    raise OSError('Unsupported platform %s' % _sys.platform)
-
-
-class TimeoutExpired(Exception):
-    """timeout occurred"""
-
-
-class MediaError(Exception):
-    """raised when media fails to be loaded/processed"""
+    raise OSError('Unsupported platform {}'.format(_sys.platform))
 
 
 class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputMix):
@@ -176,15 +243,10 @@ class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputM
     doc_header = 'Commands (type help/? <topic>):'
     misc_header = 'Reference/help guides (type help/? <topic>):'
 
-    def do_echo(self, args):
-        self.stdout.write(args + '\n')
-        self.stdout.flush()
-        if args == 'stop':
-            return True
-
     def __init__(self, media_files, interact=False, *args, parent=None, **kwargs):
         super(AudioShell, self).__init__(*args, **kwargs)
         self.file_list = iter(media_files)
+        self.played_files = []
         self.player_instance = _vlc.Instance()
         self.interactive = interact
         self.player = self.player_instance.media_player_new()
@@ -194,11 +256,11 @@ class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputM
             media = self.player_instance.media_new(file)
             self.player.set_media(media)
             self.metadata = Metadata(file)
-            self.timeout = self.metadata.get_audio_length() - .5
-            self.prompt = '{}> '.format(_os.path.basename(file)[:30])
+            self.timeout = self.metadata.get_audio_length() + .1
+            self._set_prompt(file)
             self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
         except StopIteration:
-            raise MediaError('Empty file list provided.')
+            raise IOError('Empty file list provided.')
 
     # audio_set_volume(self, i_volume) # (0 = mute, 100 = 0dB). ret 0 on sucess, -1 if out of range
     # audio_get_volume(self)
@@ -215,19 +277,26 @@ class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputM
     # get_media
     # set_media
 
+    def _set_timeout(self):
+        self.timeout = self.metadata.get_audio_length() * (1 - self.player.get_position()) + .1
+
+    def _set_prompt(self, file_name):
+        name = _os.path.splitext(_os.path.basename(file_name))[0]
+        if len(name) > 30:
+            name = name[:27] + '...'
+        self.prompt = '{} > '.format(name)
+
+
+    @staticmethod
+    def emptyline():
+        return False
+
     def preloop(self):
         self.player.play()
         file = urllib.unquote(self.player.get_media().get_mrl())[8:]
         md = self.metadata.get_audio_metadata(['artist', 'title'])
-        self.stdout.write('{}\n'
-                          'playing: {}\n'
-                          'Title: {}\n'
-                          'Artist: {}\n'
-                          'Path: {}\n'.format(HORIZ_LINE,
-                                              _os.path.basename(file),
-                                              *md,
-                                              _os.path.abspath(file)
-                                              )
+        self.stdout.write('{}\nplaying: {}\nTitle: {}\nArtist: {}\n'
+                          'Path: {}\n'.format(HORIZ_LINE, _os.path.basename(file), *md,_os.path.abspath(file))
                           )
         self.stdout.flush()
         _time.sleep(.2)
@@ -239,6 +308,13 @@ class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputM
             return True
         if not self.player.is_playing():
             return self.next_track()
+        else:
+            self._set_timeout()
+
+    def cleanup(self):
+        self.file_list = iter([])
+        self.player.stop()
+        self.player_instance.release()
 
     def next_track(self):
         try:
@@ -247,20 +323,13 @@ class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputM
             media = self.player_instance.media_new(file)
             self.player.set_media(media)
             self.metadata = Metadata(file)
-            self.prompt = '{}> '.format(_os.path.basename(file)[:30])
+            self._set_prompt(file)
             self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
-            self.timeout = self.metadata.get_audio_length() - .5
+            self._set_timeout()
             self.player.play()
             md = self.metadata.get_audio_metadata(['artist', 'title'])
-            self.stdout.write('{}\n'
-                              'playing: {}\n'
-                              'Title: {}\n'
-                              'Artist: {}\n'
-                              'Path: {}\n'.format(HORIZ_LINE,
-                                                  _os.path.basename(file),
-                                                  *md,
-                                                  _os.path.abspath(file)
-                                                  )
+            self.stdout.write('{}\nplaying: {}\nTitle: {}\nArtist: {}\n'
+                              'Path: {}\n'.format(HORIZ_LINE, _os.path.basename(file), *md, _os.path.abspath(file))
                               )
             self.stdout.flush()
             _time.sleep(.2)
@@ -283,11 +352,6 @@ class AudioShell(AliasCmdInterpreter, HideUndocumentedInterpreter, TimeoutInputM
         else:
             _os.remove(file_path)
             self.next_track()
-
-    def cleanup(self):
-        self.file_list = []
-        self.player.stop()
-        self.player_instance.release()
 
     # noinspection PyUnusedLocal
     def do_quit(self, *args):
@@ -352,8 +416,7 @@ class MetaDataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
     # def emptyline(self):
     #     pass
 
-    @staticmethod
-    def do_cancel(*args):
+    def do_cancel(self, *args):
         """
         Cancel making changes to current file's metadata and quit editing.
         Discards any unsaved changes to metadata.
@@ -364,6 +427,7 @@ class MetaDataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
         Options:
         []
         """
+        self.stdout.write('\n')
         return True
 
     # noinspection PyUnusedLocal
@@ -465,7 +529,7 @@ class MetaDataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
         """
         if '-c' != args:
             tmp_dict = self.meta.parse_update_line(args)
-            self.tmp_dict.update(tmp_dict)
+            self.tmp_dict.update(tmp_dict)                  # todo: handle user inputting invalid keys
             # self.tmp_dict = {k: v for k, v in self.tmp_dict.items() if v[0] != 0}
         else:
             self.stdout.write('reset metadata\n')
@@ -484,14 +548,12 @@ class MetaDataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
     #     self.stdout.write(self.__doc__)
 
     # noinspection PyUnusedLocal,PyPep8Naming
-    def do_EOF(self, *args):
-        return self.do_cancel()
-
     def update_prompt(self, new_prompt):
         self.prompt = '{} -> Metadata: '.format(new_prompt)
 
     # internal masking -- not aliased
     complete_view = complete_edit
+    do_EOF = do_cancel
 
     # alias commands
     alias_e = do_edit
@@ -501,73 +563,6 @@ class MetaDataShell(AliasCmdInterpreter, HideUndocumentedInterpreter):
     alias_c = do_cancel
 
 
-# todo: support multiple bookmarks
-class BookMark:
-    BOOKMARK_FILE = 'vlc_analyze_bookmarks.txt'
-    bookmark_path = _os.path.join(_os.path.dirname(_os.path.realpath(__file__)),
-                                  BOOKMARK_FILE)
-
-    @staticmethod
-    def write_hidden(file_name, data):
-        """
-        Cross platform hidden file writer.
-        """
-        # noinspection PyPep8Naming
-        FILE_ATTRIBUTE_HIDDEN = 0x02
-        win_set_attribute_func = _ctypes.windll.kernel32.SetFileAttributesW
-        # For *nix add a '.' prefix.
-        prefix = '.' if _os.name != 'nt' else ''
-        file_name = prefix + file_name
-
-        # Write file.
-        with open(file_name, 'w') as f:
-            f.write(data)
-
-        # For windows set file attribute.
-        if _os.name == 'nt':
-            ret = win_set_attribute_func(file_name, FILE_ATTRIBUTE_HIDDEN)
-            if not ret:  # There was an error.
-                raise _ctypes.WinError()
-
-    if not _os.path.isfile(bookmark_path):
-        write_hidden(bookmark_path, '')
-
-    @staticmethod
-    def load_bookmarks():
-        bkmarks = []
-        with open(BookMark.bookmark_path, 'r') as bookmark_file:
-            for line in bookmark_file:
-                bkmarks.append(line.rstrip())
-        bkmarks = list(filter(None, bkmarks))
-        return bkmarks
-
-    @staticmethod
-    def bookmark_file(media_file):
-        with open(BookMark.bookmark_path, 'r+') as bookmark_file:
-            bookmark_file.truncate()
-            if media_file is not None:
-                bookmark_file.write('{}\n'.format(media_file))
-
-    @staticmethod
-    def clear_marks():
-        BookMark.bookmark_file(None)
-
-
-# misc util functions
-def split_comma_str(comma_str):
-    return [item for item in comma_str.replace(' ', '').split(',')]
-
-
-def multiple_file_types(path, patterns, recursion=False):
-    if recursion:
-        files = (_glob.iglob(_os.path.abspath(_os.path.join(path, './**/*.{}'.format(pattern))), recursive=recursion)
-                 for pattern in patterns)
-    else:
-        files = (_glob.iglob(_os.path.abspath(_os.path.join(path, '*.{}'.format(pattern))))
-                 for pattern in patterns)
-    return _it.chain.from_iterable(files)
-
-
 if __name__ == '__main__':
     import os
     import sys
@@ -575,12 +570,13 @@ if __name__ == '__main__':
     from glob import glob
     from random import choice
 
-    f = open(os.devnull, 'w')
-    sys.stderr = f
+    # f = open(os.devnull, 'w')
+    # sys.stderr = f
 
     # val = input_timeout('this is a test for 5 second timer.', 5)
     # print(val)
 
+    NUM_TRACKS = 100
     src_dir = os.path.join(os.curdir, 'ref', 'music')
     tmp_dir = os.path.join(os.curdir, 'ref', 'temp')
     ext = 'mp3'
@@ -597,17 +593,24 @@ if __name__ == '__main__':
             shutil.copy(fetched_track, local)
             return local
 
+    def rand_tracks(n, *args, **kwargs):
+        num = 0
+        while num < n:
+            yield rand_track(*args, **kwargs)
+            num += 1
+
     # par = MdataShell(Metadata(rand_track()), view=True)
     # shell = MdataShell(Metadata(rand_track()), view=True, parent=par)
     shell = MetaDataShell(Metadata(rand_track(src_dir, tmp_dir, ext)), view=False)
     # shell.cmdloop()
 
-    file_list = []
-    for i in range(3):
-        file_list.append(rand_track(src_dir, tmp_dir, ext))
-
-    shell = AudioShell(file_list, interact=True)
+    # file_list = []
+    # for i in range(3):
+    #     file_list.append(rand_track(src_dir, tmp_dir, ext))
+    #
+    # shell = AudioShell(file_list, interact=True)
+    shell = AudioShell(rand_tracks(NUM_TRACKS, src_dir, tmp_dir, ext), interact=True)
     shell.cmdloop()
 
-    f.close()
+    # f.close()
     sys.exit(0)

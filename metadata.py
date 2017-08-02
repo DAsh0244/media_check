@@ -13,10 +13,11 @@ Description:
 import itertools as _it
 import os as _os
 from copy import deepcopy as _deepcopy
-
 from mutagen.mp3 import EasyMP3 as _MP3
+from mutagen.easyid3 import EasyID3KeyError
 
 
+# todo: handle invalid keys
 class Metadata:
     _edit_prompt = ('\n'
                     'Enter fields in <field1>::<val>,, <field2>::<val>,,...\n'
@@ -60,6 +61,7 @@ class Metadata:
     def __init__(self, afile=None):
         self.file = _os.path.basename(afile)
         self.audio = _MP3(afile)
+        self.tmp_dict = _deepcopy(self.audio)
 
     @property
     def tags(self):
@@ -115,11 +117,14 @@ class Metadata:
         return update_dict
 
     def update(self, update_dict):
-        self.audio.update(update_dict)
+        try:
+            self.audio.update(update_dict)
+        except EasyID3KeyError:
+            pass
 
 
 def pairwise(iterable):
-    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
     a, b = _it.tee(iterable)
     next(b, None)
     return zip(a, b)

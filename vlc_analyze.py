@@ -11,7 +11,7 @@ import metadata
 import interpreter
 
 __author__ = 'Danyal Ahsanullah'
-__version_info__ = (0, 3, 2)
+__version_info__ = (0, 3, 3)
 __version__ = '.'.join(map(str, __version_info__))
 
 import os as _os
@@ -111,7 +111,7 @@ def audio_file_edit(media_file):
                         # skip forward 30 seconds. equal to 's 30'
                         p.set_position((30.0 / meta.get_audio_length()) + p.get_position())
                 elif choice == 'b':
-                    _utils.BookMark.bookmark_file(media_file)
+                    _utils.bookmark_file(media_file)
             except (TypeError, UnicodeDecodeError):
                 pass
             _time.sleep(.1)
@@ -138,19 +138,20 @@ if __name__ == '__main__':
     # print(vars(args))
     if args.clear:
         bookmarks = ''
-        _utils.BookMark.clear_marks()
+        _utils.clear_marks()
         print('\nCleared Bookmarks!')
     else:
-        bookmarks = _utils.BookMark.load_bookmarks()
+        bookmarks = _utils.load_bookmarks()
         if bookmarks:
-            comm_path = _os.path.commonprefix([BASE_PATH, bookmarks[0]])
-            relpath = bookmarks[0][len(comm_path):]
-            base_name = _os.path.basename(bookmarks[0])
-            bk_msg = ('\nExisting bookmark found: {}\n'
-                      'RelativePath: .{}\n'
-                      'Run again with the -c flag to clear bookmark\n'
-                      )
-            print(bk_msg.format(base_name, relpath))
+            for bookmark in bookmarks:
+                comm_path = _os.path.commonprefix([BASE_PATH, bookmark])
+                relpath = bookmarks[0][len(comm_path):]
+                base_name = _os.path.basename(bookmarks[0])
+                bk_msg = ('\nExisting bookmark found: {}\n'
+                          'RelativePath: .{}\n'
+                          )
+                print(bk_msg.format(base_name, relpath))
+            print('\nRun again with the -c flag to clear bookmark\n')
     print('Using vlc:', str(_vlc.libvlc_get_version(), 'utf-8'))
     # print(vars(args))
     # print(bookmarks)
@@ -159,13 +160,16 @@ if __name__ == '__main__':
             print('\nnow searching in: {} {}'.format(path, '(resursive)' if args.recursive else ''))
             files = _utils.multiple_file_types(path, _utils.split_comma_str(args.extension), recursion=args.recursive)
             hit = False if bookmarks else True
-            while not hit:  # skip unitl hit the bookmark
+            while not hit:  # skip until hit the bookmark
                 for file in files:
                     # print(file)
                     if file in bookmarks:
-                        hit = True
                         audio_file_edit(file)
-                        break
+                        try:
+                            bookmarks.remove(file)
+                        except KeyError:
+                            hit = True
+                            break
                     else:
                         pass
             for file in files:
