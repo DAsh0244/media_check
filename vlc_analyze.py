@@ -7,28 +7,30 @@ HKEY_CLASSES_ROOT\Applications\python.exe\shell\open\command
 This program allows you to use the command line to cycle through all the media files in a directory
 and play them with vlc player as well as edit each file's metadata
 """
-import metadata
-import interpreter
+
 
 __author__ = 'Danyal Ahsanullah'
 __version_info__ = (0, 3, 3)
 __version__ = '.'.join(map(str, __version_info__))
 
+
 import os as _os
 import vlc as _vlc
 import sys as _sys
 import time as _time
-import utils as _utils
 from argparse import ArgumentParser as _ArgParser
+
+import _utils
+import metadata
 
 
 # find the local copy of vlc.py from the cloned github repo
 # _VLCPATH = os.path.abspath(os.path.join(os.curdir,'vlc_python','generated'))
 # sys.path.append(_VLCPATH)
 # # del _VLCPATH
-# import vlc
+# import vlc as _vlc
 
-
+# create cli parser
 parser = _ArgParser('vlc_analyze')
 parser.add_argument('--version', '-V', action='version', version="%(prog)s " + __version__)
 parser.add_argument('path', type=str, nargs='*', help='path of file(s) to be read in.', default=_os.curdir)
@@ -41,11 +43,13 @@ parser.add_argument('--extension', '-e', type=str, nargs='+',
                     # default='mp3, wav, flac, ogg, mp4'
                     )
 parser.add_argument('--interact', '-i', action="store_true",
-                    help='if enabled will allow for interactive prompts ' 
-                         'before proceeding with modifying/removing files.'
+                    help=('if enabled will allow for interactive prompts ' 
+                          'before proceeding with modifying/removing files.'),
                     )
 parser.add_argument('--recursive', '-r', action='store_true', help='flag that sets recursive file search')
 parser.add_argument('--clear', '-c', action='store_true', help='clears bookmarks')
+# parser.add_argument('--verbose', '-v', action="store_true", help='prints a more detailed output.')
+# parser.add_argument('--quiet', '-q', action="store_true", help='supresses console output.')
 
 
 def audio_file_edit(media_file):
@@ -71,7 +75,7 @@ def audio_file_edit(media_file):
             try:
                 # raw_in = input_with_timeout(_prompt, (meta.get_audio_length() - .5), interrupt_func=flag.is_set)
                 # choice = str(raw_in, 'utf-8').rstrip()
-                raw_in = _utils.input_timeout(_prompt, timeout=(meta.get_audio_length() - .5))
+                raw_in = _utils.input_timeout(_prompt, timeout=(meta.length - .5))
                                            # interrupt=p.is_playing, inverse=True)
                 choice = raw_in.rstrip()
             except ValueError:
@@ -96,7 +100,7 @@ def audio_file_edit(media_file):
                     try:
                         # print(float(choice[2:])/meta.get_audio_length())
                         # print(p.get_position())
-                        calc_pos = (float(choice[2:]) / meta.get_audio_length()) + p.get_position()
+                        calc_pos = (float(choice[2:]) / meta.length) + p.get_position()
                         if calc_pos > 1:
                             p.set_position(0.999)
                             # flag.set()
@@ -109,7 +113,7 @@ def audio_file_edit(media_file):
                             # print(p.get_position())
                     except ValueError:
                         # skip forward 30 seconds. equal to 's 30'
-                        p.set_position((30.0 / meta.get_audio_length()) + p.get_position())
+                        p.set_position((30.0 / meta.length) + p.get_position())
                 elif choice == 'b':
                     _utils.bookmark_file(media_file)
             except (TypeError, UnicodeDecodeError):
@@ -129,11 +133,6 @@ def audio_file_edit(media_file):
 
 if __name__ == '__main__':
     BASE_PATH = _os.getcwd()
-    # create cli parser
-    # parser.add_argument('--verbose', '-v', action="store_true", help='prints a more detailed output.')
-    # parser.add_argument('--quiet', '-q', action="store_true", help='supresses console output.')
-
-    # parse args
     args = parser.parse_args()
     # print(vars(args))
     if args.clear:

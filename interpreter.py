@@ -13,116 +13,11 @@ Description:
     Built off of the "Cmd"  class from the builtin module "cmd"
 """
 import os as _os
-import sys as _sys
-import time as _time
 from cmd import Cmd as _Cmd
+import _utils
 
 
 # misc functions / decorators
-if _sys.platform.startswith('win'):
-    from msvcrt import getch, kbhit
-    from string import printable as _printable
-
-    import rlcompleter
-    import readline
-
-    old_completer = readline.get_completer()
-    completer = rlcompleter.Completer()
-    readline.set_completer(completer)
-    readline.parse_and_bind("tab: complete")
-
-    special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
-    # special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
-
-    # todo: things to implement: delete/tab/esc/arrow-key support, readline support
-    # http://help.adobe.com/en_US/AS2LCR/Flash_10.0/help.html?content=00000520.html
-    printable = _printable.replace('\t', '')
-
-    def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out'):
-        def write_flush(string):
-            stream.write(string)
-            stream.flush()
-
-        start_time = _time.time()
-        if default == '':
-            write_flush('{}'.format(caption))
-        else:
-            write_flush('{}({}):'.format(caption, default))
-        try:
-            tmp_str = str(input_timeout.partial, 'utf-8')
-            byte_arr = bytearray(input_timeout.partial)
-            write_flush(tmp_str)
-        except AttributeError:
-            byte_arr = bytearray()
-        input_string = ''
-        while True:
-            if kbhit():
-                char = getch()
-                if ord(char) in special_key_sig:  # if special key, get extra byte and merge
-                    tmp = getch()
-                    char = bytes(ord(char) + (ord(tmp) << 8))
-                if char == b'\r':  # enter_key
-                    input_string = str(byte_arr, 'utf-8')
-                    input_timeout.partial = b''
-                    break
-                elif char == b'\b':  # backspace_key
-                    try:
-                        byte_arr.pop()
-                        write_flush('\b  \b\b')
-                    except IndexError:
-                        pass
-                elif char == b'\t':
-                    try:
-                        phrase = str(byte_arr, 'utf-8')
-                        terms = []
-                        for idx in range(_sys.maxsize):
-                            term = completer.complete(phrase, idx)
-                            if term is None:
-                                break
-                            terms.append(term)
-                        if terms:
-                            if len(terms) == 1:
-                                partial = terms[0][len(phrase):]
-                                byte_arr.extend(bytearray(partial, 'utf-8'))
-                                write_flush(partial)
-                            else:
-                                complete_txt = '  '.join([term for term in terms])
-                                write_flush('\n' + complete_txt)
-                                input_timeout.partial = byte_arr
-                                break
-                    except Exception as e:
-                        print(e)
-                        pass
-                elif str(char, 'utf-8') in printable:  # printable character
-                    byte_arr.append(ord(char))
-                    write_flush(str(char, 'utf-8'))
-
-            if (_time.time() - start_time) > timeout:
-                stream.write(timeout_msg)
-                break
-
-        write_flush('\n')  # needed to move to next line
-        if input_string:
-            return input_string
-        else:
-            return default
-    input_timeout.partial = b''
-
-elif _sys.platform.startswith('linux'):
-    import select as _select
-
-
-    def input_timeout(prompt, timeout):
-        _sys.stdout.write(prompt)
-        _sys.stdout.flush()
-        ready, _, _ = _select.select([_sys.stdin], [], [], timeout)
-        if ready:
-            return _sys.stdin.readline().rstrip('\n')  # expect stdin to be line-buffered
-        else:
-            return ''
-else:
-    raise OSError('Unsupported platform %s' % _sys.platform)
-
 # def make_alias(alias, method, args):
 #     pass
 
@@ -132,10 +27,12 @@ else:
 # they are designed to be compatible with each other
 # for multiple inheritance use cases.
 
+
 class ShellCmdMix(_Cmd):
     """
     cmd shell mix-in that provides shell access
     """
+
     def __init__(self, *args, **kwargs):
         super(ShellCmdMix, self).__init__(*args, *kwargs)
 
@@ -149,6 +46,7 @@ class HideNoneDocMix(_Cmd):
     """
     shell that hides sections of help depending on if their corresponding header is None
     """
+
     def __init__(self, *args, **kwargs):
         super(HideNoneDocMix, self).__init__(*args, **kwargs)
 
@@ -230,6 +128,7 @@ class TimeoutInputMix(_Cmd):
     """
     mixin for timeout supported input methods
     """
+
     def __init__(self, timeout=None, *args, **kwargs):
         super(TimeoutInputMix, self).__init__(*args, **kwargs)
         self.timeout = timeout
@@ -267,8 +166,9 @@ class TimeoutInputMix(_Cmd):
                                 elif self.timeout:
                                     tout = self.timeout
 
-                                get_input = lambda prompt: input_timeout(caption=prompt, timeout=tout,
-                                                                         stream=self.stdout, timeout_msg=timeout_msg)
+                                get_input = lambda prompt: _utils.input_timeout(caption=prompt, timeout=tout,
+                                                                                stream=self.stdout,
+                                                                                timeout_msg=timeout_msg)
                             except:
                                 get_input = lambda prompt: input(prompt)
                             line = get_input(self.prompt)
@@ -298,24 +198,12 @@ class TimeoutInputMix(_Cmd):
 
 # more specialized interpreters for ease of use.
 # not guaranteed to be fully compatible for mixing purposes.
-
-
-class HideUndocumentedInterpreter(HideNoneDocMix):
-    """
-    interpreter that hides undocumented commands from being displayed
-    in the help messages.
-    """
-    undoc_header = None
-
-    def __init__(self, *args, **kwargs):
-        super(HideUndocumentedInterpreter, self).__init__(*args, **kwargs)
-
-
 class AliasCmdInterpreter(AliasMix):
     """
     AliasedShell with generally implemented command 'alias' that lists all aliases.
     'alias' has also been mapped to 'a'
     """
+
     def __init__(self, *args, **kwargs):
         super(AliasCmdInterpreter, self).__init__(*args, **kwargs)
 

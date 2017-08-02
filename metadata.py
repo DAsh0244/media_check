@@ -10,14 +10,25 @@ Copyright (c):  2017 Danyal Ahsanullah
 License: N/A
 Description: 
 """
-import itertools as _it
 import os as _os
+import itertools as _it
 from copy import deepcopy as _deepcopy
+
 from mutagen.mp3 import EasyMP3 as _MP3
-from mutagen.easyid3 import EasyID3KeyError
+from mutagen.flac import FLAC as _FLAC
+
+_F_TYPES = {'mp3': _MP3,
+            'flac': _FLAC,
+            }
 
 
-# todo: handle invalid keys
+def pairwise(iterable):
+    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
+    a, b = _it.tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+
 class Metadata:
     _edit_prompt = ('\n'
                     'Enter fields in <field1>::<val>,, <field2>::<val>,,...\n'
@@ -58,16 +69,16 @@ class Metadata:
                      "language",
                      }
 
-    def __init__(self, afile=None):
+    def __init__(self, afile=None, f_type='mp3'):
         self.file = _os.path.basename(afile)
-        self.audio = _MP3(afile)
-        self.tmp_dict = _deepcopy(self.audio)
+        self.audio = _F_TYPES[f_type.lower()](afile)
 
     @property
     def tags(self):
         return _deepcopy(self.audio)
 
-    def get_audio_length(self):
+    @property
+    def length(self):
         return self.audio.info.length
 
     def get_audio_metadata(self, fields=None):
@@ -106,8 +117,14 @@ class Metadata:
                 tmp_dict.update(new_args)
 
     def save(self, update_dict):
-        self.audio.update(update_dict)
+        self.update(update_dict)
         self.audio.save()
+
+    def update(self, update_dict):
+        self.audio.update(self.sanitize(update_dict))
+
+    def sanitize(self, unclean_dict):
+        return {k: v for k, v in unclean_dict.items() if k in self.possible_tags}
 
     @staticmethod
     def parse_update_line(update_string):
@@ -115,16 +132,3 @@ class Metadata:
                        pair in update_string.split(',,') for
                        key, value in pairwise(pair.split('::'))}
         return update_dict
-
-    def update(self, update_dict):
-        try:
-            self.audio.update(update_dict)
-        except EasyID3KeyError:
-            pass
-
-
-def pairwise(iterable):
-    """s -> (s0,s1), (s1,s2), (s2, s3), ..."""
-    a, b = _it.tee(iterable)
-    next(b, None)
-    return zip(a, b)
