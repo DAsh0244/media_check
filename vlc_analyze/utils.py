@@ -38,13 +38,18 @@ if _sys.platform.startswith('win'):
     readline.parse_and_bind("tab: complete")
 
     special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
+    arrow_keys = {'up': 18656,  # up arrow
+                  'down': 20704,  # down arrow
+                  'left': 19424,  # left arrow
+                  'right': 19936,  # right arrow
+                  }
     # special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
 
-    # todo: things to implement: delete/tab/esc/arrow-key support, readline support
+    # todo: things to implement: delete/esc/arrow-key support,
     # http://help.adobe.com/en_US/AS2LCR/Flash_10.0/help.html?content=00000520.html
     printable = _printable.replace('\t', '')
 
-    def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out'):
+    def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out', completer=None):
         def write_flush(string):
             stream.write(string)
             stream.flush()
@@ -55,9 +60,8 @@ if _sys.platform.startswith('win'):
         else:
             write_flush('{}({}):'.format(caption, default))
         try:
-            tmp_str = str(input_timeout.partial, 'utf-8')
             byte_arr = bytearray(input_timeout.partial)
-            write_flush(tmp_str)
+            write_flush(str(input_timeout.partial, 'utf-8'))
         except AttributeError:
             byte_arr = bytearray()
         input_string = ''
@@ -67,10 +71,21 @@ if _sys.platform.startswith('win'):
                     char = getch()
                     if ord(char) in special_key_sig:  # if special key, get extra byte and merge
                         tmp = getch()
-                        char = bytes(ord(char) + (ord(tmp) << 8))
-                    if char == b'\r':  # enter_key
+                        char = ord(char) + (ord(tmp) << 8)
+                    if char in arrow_keys.values():
+                        if char == arrow_keys['up']:
+                            try:
+                                write_flush('\b  \b\b' * len(byte_arr))
+                                byte_arr = bytearray(input_timeout.previous)
+                                write_flush(str(input_timeout.previous, 'utf-8'))
+                                # input_timeout.previous = b''
+                            except AttributeError:
+                                pass
+                    elif char == b'\r':  # enter_key
                         input_string = str(byte_arr, 'utf-8')
                         input_timeout.partial = b''
+                        if input_string.strip():
+                            input_timeout.previous = byte_arr
                         break
                     elif char == b'\b':  # backspace_key
                         try:
@@ -117,6 +132,7 @@ if _sys.platform.startswith('win'):
         else:
             return default
     input_timeout.partial = b''
+    input_timeout.previous = b''
 elif _sys.platform.startswith('linux'):
     import select as _select
 
