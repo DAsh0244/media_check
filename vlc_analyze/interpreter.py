@@ -13,7 +13,7 @@ Description:
     Built off of the "Cmd"  class from the builtin module "cmd"
 """
 import os as _os
-import rlcompleter
+# import rlcompleter
 from cmd import Cmd as _Cmd
 
 from vlc_analyze import utils
@@ -48,7 +48,6 @@ class HideNoneDocMix(_Cmd):
     """
     shell that hides sections of help depending on if their corresponding header is None
     """
-
     def __init__(self, *args, **kwargs):
         super(HideNoneDocMix, self).__init__(*args, **kwargs)
 

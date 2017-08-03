@@ -31,7 +31,7 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     misc_header = 'Reference/help guides (type help/? <topic>):'
     undoc_header = None
 
-    def __init__(self, media_files, interact=False, *args, parent=None, **kwargs):
+    def __init__(self, media_files, interact=False, *args, **kwargs):
         super(AudioShell, self).__init__(*args, **kwargs)
         self.file_list = iter(media_files)
         self.played_files = []
@@ -51,6 +51,7 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     def get_file_from_player(self):
         return urllib.unquote(self.player.get_media().get_mrl())[8:].replace('/', _os.sep)
 
+    # noinspection PyMethodMayBeStatic
     def emptyline(self):
         return False
 
@@ -75,7 +76,7 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         self.player.stop()
         self.player_instance.release()
 
-    # noinspection PyUnusedLocal
+    # noinspection PyUnusedLocal,PyAttributeOutsideInit
     def do_next_track(self, *args):
         """
         Move onto the next track.
@@ -197,8 +198,10 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         Options:
         [topic|command] -- name of topic or command to print
         """
+        # noinspection PyUnresolvedReferences
         super(AudioShell, self).do_help(arg)
 
+    # noinspection PyPep8Naming
     def do_EOF(self):
         self.do_quit()
 
@@ -246,6 +249,7 @@ class MetaDataShell(AliasCmdInterpreter, HideNoneDocMix):
     # def emptyline(self):
     #     pass
 
+    # noinspection PyUnusedLocal
     def do_cancel(self, *args):
         """
         Cancel making changes to current file's metadata and quit editing.
@@ -446,4 +450,3 @@ if __name__ == '__main__':
 
     # f.close()
     sys.exit(0)
-

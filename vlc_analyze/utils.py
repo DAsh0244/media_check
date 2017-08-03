@@ -24,12 +24,14 @@ BOOKMARK_PATH = _os.path.dirname(_os.path.abspath(__file__))
 BOOKMARK_FILE = _os.path.join(BOOKMARK_PATH, BOOKMARK_FILENAME)
 
 # util functions
+
+# input_timeout implementations
 if _sys.platform.startswith('win'):
-    from msvcrt import getch, kbhit, ungetch
+    from msvcrt import getch, kbhit
     from string import printable as _printable
 
-    import rlcompleter
-    import readline
+    # import rlcompleter
+    # import readline
 
     # old_completer = readline.get_completer()
     # completer = rlcompleter.Completer()
@@ -48,6 +50,7 @@ if _sys.platform.startswith('win'):
     # todo: things to implement: delete/esc/arrow-key support,
     # http://help.adobe.com/en_US/AS2LCR/Flash_10.0/help.html?content=00000520.html
     printable = _printable.replace('\t', '')
+
 
     def input_timeout(caption, timeout=5, default='', *_,
                       stream=_sys.stdout, timeout_msg='\n ----- timed out', completer=None):
@@ -136,6 +139,8 @@ if _sys.platform.startswith('win'):
             return input_string
         else:
             return default
+
+
     input_timeout.partial = b''
     input_timeout.previous = b''
 elif _sys.platform.startswith('linux'):
@@ -183,6 +188,7 @@ def make_hidden(file_name):
     except PermissionError:
         pass
 
+    # noinspection PyPep8Naming
     FILE_ATTRIBUTE_HIDDEN = 0x02
     win_set_attribute_func = _ctypes.windll.kernel32.SetFileAttributesW
     # For *nix add a '.' prefix.
@@ -201,8 +207,8 @@ def bookmarks_load(path=BOOKMARK_FILE):
         with open(path, 'r') as bkfile:
             for line in bkfile:
                 bkmarks.add(line.rstrip())
-        # bkmarks = set(filter(None, bkmarks))
-        # bkmarks = set(filter(_os.path.isfile, bkmarks))
+                # bkmarks = set(filter(None, bkmarks))
+                # bkmarks = set(filter(_os.path.isfile, bkmarks))
     except FileNotFoundError:
         write_hidden(path, '')
     finally:
@@ -211,7 +217,7 @@ def bookmarks_load(path=BOOKMARK_FILE):
 
 def bookmark_file(media_file, path=BOOKMARK_FILE):
     with open(path, 'a') as bkfile:
-            bkfile.write('{}\n'.format(media_file))
+        bkfile.write('{}\n'.format(media_file))
 
 
 def bookmark_files(files, path=BOOKMARK_FILE):
