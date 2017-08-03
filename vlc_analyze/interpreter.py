@@ -13,6 +13,7 @@ Description:
     Built off of the "Cmd"  class from the builtin module "cmd"
 """
 import os as _os
+import rlcompleter
 from cmd import Cmd as _Cmd
 
 from vlc_analyze import utils
@@ -133,6 +134,7 @@ class TimeoutInputMix(_Cmd):
     def __init__(self, timeout=None, *args, **kwargs):
         super(TimeoutInputMix, self).__init__(*args, **kwargs)
         self.timeout = timeout
+        # self.completer = rlcompleter.Completer(self.__dict__)
 
     def cmdloop(self, timeout=None, intro=None, timeout_msg=''):
         """
@@ -169,7 +171,8 @@ class TimeoutInputMix(_Cmd):
 
                                 get_input = lambda prompt: utils.input_timeout(caption=prompt, timeout=tout,
                                                                                stream=self.stdout,
-                                                                               timeout_msg=timeout_msg)
+                                                                               timeout_msg=timeout_msg,
+                                                                               completer=self.complete)
                             except NameError:
                                 get_input = lambda prompt: input(prompt)
                             line = get_input(self.prompt)

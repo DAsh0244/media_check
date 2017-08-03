@@ -134,6 +134,13 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
             utils.bookmark_remove(self.get_file_from_player())
 
     def do_help(self, arg):
+        """
+        Usage:
+        help [topic|command]
+
+        Options:
+        [topic|command] -- name of topic or command to print
+        """
         super(AudioShell, self).do_help(arg)
 
     # internal masking:

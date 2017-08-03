@@ -24,19 +24,19 @@ BOOKMARK_PATH = _os.path.dirname(_os.path.abspath(__file__))
 BOOKMARK_FILE = _os.path.join(BOOKMARK_PATH, BOOKMARK_FILENAME)
 
 # util functions
-# todo: readline support for input with timeout
 if _sys.platform.startswith('win'):
-    from msvcrt import getch, kbhit
+    from msvcrt import getch, kbhit, ungetch
     from string import printable as _printable
 
     import rlcompleter
     import readline
 
-    old_completer = readline.get_completer()
-    completer = rlcompleter.Completer()
-    readline.set_completer(completer)
-    readline.parse_and_bind("tab: complete")
+    # old_completer = readline.get_completer()
+    # completer = rlcompleter.Completer()
+    # readline.set_completer(completer)
+    # readline.parse_and_bind("tab: complete")
 
+    BKSPCE_ONE_CHR = '\b  \b\b'
     special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
     arrow_keys = {'up': 18656,  # up arrow
                   'down': 20704,  # down arrow
@@ -49,7 +49,9 @@ if _sys.platform.startswith('win'):
     # http://help.adobe.com/en_US/AS2LCR/Flash_10.0/help.html?content=00000520.html
     printable = _printable.replace('\t', '')
 
-    def input_timeout(caption, timeout=5, default='', *_, stream=_sys.stdout, timeout_msg='\n ----- timed out', completer=None):
+    def input_timeout(caption, timeout=5, default='', *_,
+                      stream=_sys.stdout, timeout_msg='\n ----- timed out', completer=None):
+
         def write_flush(string):
             stream.write(string)
             stream.flush()
@@ -75,7 +77,7 @@ if _sys.platform.startswith('win'):
                     if char in arrow_keys.values():
                         if char == arrow_keys['up']:
                             try:
-                                write_flush('\b  \b\b' * len(byte_arr))
+                                write_flush(BKSPCE_ONE_CHR * len(byte_arr))
                                 byte_arr = bytearray(input_timeout.previous)
                                 write_flush(str(input_timeout.previous, 'utf-8'))
                                 # input_timeout.previous = b''
@@ -90,18 +92,21 @@ if _sys.platform.startswith('win'):
                     elif char == b'\b':  # backspace_key
                         try:
                             byte_arr.pop()
-                            write_flush('\b  \b\b')
+                            write_flush(BKSPCE_ONE_CHR)
                         except IndexError:
                             pass
                     elif char == b'\t':
                         try:
                             phrase = str(byte_arr, 'utf-8')
                             terms = []
-                            for idx in range(_sys.maxsize):
-                                term = completer.complete(phrase, idx)
+                            old_stdin = _sys.stdin
+                            _sys.stdin = byte_arr
+                            for idx in range(10):
+                                term = completer(phrase, idx)
                                 if term is None:
                                     break
                                 terms.append(term)
+                            _sys.stdin = old_stdin
                             if terms:
                                 if len(terms) == 1:
                                     partial = terms[0][len(phrase):]
@@ -113,7 +118,7 @@ if _sys.platform.startswith('win'):
                                     input_timeout.partial = byte_arr
                                     break
                         except Exception as e:
-                            print(e)
+                            print('\n', e, '\n')
                             pass
                     elif str(char, 'utf-8') in printable:  # printable character
                         byte_arr.append(ord(char))
