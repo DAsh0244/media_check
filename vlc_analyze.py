@@ -128,7 +128,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # print(vars(args))
     if args.clear:
-        bookmarks = {''}
         _utils.bookmark_clear_mark()
         sys.stdout.write('\nCleared Bookmarks!\n')
         sys.stdout.flush()
@@ -139,34 +138,33 @@ if __name__ == '__main__':
                 comm_path = os.path.commonprefix([BASE_PATH, bookmark])
                 relpath = bookmark[len(comm_path):]
                 base_name = os.path.basename(bookmark)
-                bk_msg = ('\nExisting bookmark found: {}\n'
-                          'RelativePath: .{}\n'
-                          )
+                bk_msg = '\nExisting bookmark found: {}\nRelativePath: .{}\n'
                 sys.stdout.write(bk_msg.format(base_name, relpath))
-            sys.stdout.write('\nRun again with the -c flag to clear bookmark\n')
-    sys.stdout.write('Using vlc:{}\n'.format(str(vlc.libvlc_get_version(), 'utf-8')))
+            sys.stdout.write('\nRun again with the -c flag to clear bookmarks\n')
+        else:
+            del bookmarks
+    sys.stdout.write('Using vlc: {}\n'.format(str(vlc.libvlc_get_version(), 'utf-8')))
     sys.stdout.flush()
     # print(vars(args))
     # print(bookmarks)
     for path in args.path:
         if os.path.isdir(path):
-            sys.stdout.write('\nnow searching in: {} {}\n'.format(path, '(recursive)' if args.recursive else ''))
+            sys.stdout.write('\nnow searching in: {} {}\n'.format(os.path.abspath(path), '(recursive)' if args.recursive else ''))
             sys.stdout.flush()
             files = _utils.multiple_file_types(path, _utils.split_comma_str(args.extension),
                                                recursion=args.recursive)
             shell = AudioShell(media_files=files, interact=args.interact)
-            if bookmarks:
+            try:
                 while bookmarks:
-                    file = next(files)
                     try:
+                        file = next(files)
                         if file in bookmarks:
                             shell.file_list = chain([file], files)
                             shell.cmdloop()
-                            bookmarks.remove(file)
-                            # break
+                            bookmarks.discard(file)
                     except StopIteration:
-                        pass
-            else:
+                        break
+            except NameError:
                 shell.cmdloop()
         else:
             sys.stdout.write(path+'\n')

@@ -38,7 +38,6 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         self.interactive = interact
         self.player = self.player_instance.media_player_new()
 
-
     def _set_timeout(self):
         self.timeout = self.metadata.length * (1 - self.player.get_position()) + .1
 
@@ -51,43 +50,26 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     def get_file_from_player(self):
         return urllib.unquote(self.player.get_media().get_mrl())[8:].replace('/', _os.sep)
 
-    @staticmethod
-    def emptyline():
+    def emptyline(self):
         return False
-
-    def preloop(self):
-        file = next(self.file_list)
-        media = self.player_instance.media_new(file)
-        self.player.set_media(media)
-        self.metadata = Metadata(file)
-        self.timeout = self.metadata.length + .1
-        self._set_prompt(file)
-        self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
-        self.player.play()
-        file = urllib.unquote(self.player.get_media().get_mrl())[8:]
-        md = self.metadata.get_audio_metadata(['artist', 'title'])
-        self.stdout.write('{}\nplaying: {}\nTitle: {}\nArtist: {}\n'
-                          'Path: {}\n'.format(HORIZ_LINE, _os.path.basename(file), *md,_os.path.abspath(file))
-                          )
-        self.stdout.flush()
-        _time.sleep(.2)
-        # return self.postcmd(None, '')
 
     # noinspection PyUnusedLocal
     def postcmd(self, stop, line):
         if stop:
             return True
         if not self.player.is_playing():
-            return self.next_track()
+            return self.do_next_track()
         else:
             self._set_timeout()
 
-    def cleanup(self):
+    # noinspection PyUnusedLocal
+    def do_quit(self, *args):
         self.file_list = iter([])
         self.player.stop()
         self.player_instance.release()
 
-    def next_track(self):
+    # noinspection PyUnusedLocal
+    def do_next_track(self, *args):
         try:
             self.player.stop()
             file = next(self.file_list)
@@ -106,12 +88,14 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
             _time.sleep(.2)
             return False
         except StopIteration:
-            self.cleanup()
+            self.do_quit()
             return True
 
+    # noinspection PyUnusedLocal
     def do_edit(self, *args):
         self.mdatashell.cmdloop()
 
+    # noinspection PyUnusedLocal
     def do_delete(self, *args):
         self.player.stop()
         file_path = urllib.unquote(self.player.get_media().get_mrl())[8:]
@@ -119,14 +103,10 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
             confirm = input('Really delete? (y/n): ')
             if 'y' == confirm.rstrip().lower():
                 _os.remove(file_path)
-                self.next_track()
+                self.do_next_track()
         else:
             _os.remove(file_path)
-            self.next_track()
-
-    # noinspection PyUnusedLocal
-    def do_quit(self, *args):
-        self.cleanup()
+            self.do_next_track()
 
     def do_skip(self, duration=''):
             if not duration:
@@ -140,11 +120,11 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
             else:
                 self.player.set_position(calc_pos)
 
-    def do_bookmark(self, *args):
-        _utils.bookmark_file(self.get_file_from_player())
-
-    def do_next_track(self, *args):
-        self.next_track()
+    def do_bookmark(self, bookmark):
+        if bookmark.strip() != '':
+            _utils.bookmark_file(bookmark)
+        else:
+            _utils.bookmark_file(self.get_file_from_player())
 
     def do_remove_bookmark(self, bookmark):
         if bookmark.strip() != '':
@@ -156,6 +136,7 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         super(AudioShell, self).do_help(arg)
 
     # internal masking:
+    preloop = do_next_track
     do_EOF = do_quit
 
     # aliased commmands
