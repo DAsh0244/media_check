@@ -20,11 +20,12 @@ import ctypes as _ctypes
 import itertools as _it
 
 # constants
-BOOKMARK_FILE = 'vlc_analyze_bookmarks.txt'
-BOOKMARK_PATH = _os.path.join(_os.path.dirname(_os.path.realpath(__file__)),
-                              BOOKMARK_FILE)
+BOOKMARK_FILENAME = 'vlc_analyze_bookmarks.txt'
+BOOKMARK_PATH = _os.path.dirname(_os.path.abspath(__file__))
+BOOKMARK_FILE = _os.path.join(BOOKMARK_PATH, BOOKMARK_FILENAME)
 
 # util functions
+# todo: readline support for input with timeout
 if _sys.platform.startswith('win'):
     from msvcrt import getch, kbhit
     from string import printable as _printable
@@ -141,7 +142,7 @@ def write_hidden(file_name, data):
     file_name = prefix + file_name
 
     # Write file.
-    with open(file_name, 'w') as f:
+    with open(file_name, 'a') as f:
         f.write(data)
 
     # For windows set file attribute.
@@ -151,13 +152,31 @@ def write_hidden(file_name, data):
             raise _ctypes.WinError()
 
 
-def load_bookmarks(path=BOOKMARK_PATH):
+def make_hidden(file_name):
+    # noinspection PyPep8Naming
+    try:
+        open(file_name, 'w')
+    except PermissionError:
+        pass
+
+    FILE_ATTRIBUTE_HIDDEN = 0x02
+    win_set_attribute_func = _ctypes.windll.kernel32.SetFileAttributesW
+    # For *nix add a '.' prefix.
+    prefix = '.' if _os.name != 'nt' else ''
+    file_name = prefix + file_name
+    if _os.name == 'nt':
+        ret = win_set_attribute_func(file_name, FILE_ATTRIBUTE_HIDDEN)
+        if not ret:  # There was an error.
+            raise _ctypes.WinError()
+    return file_name
+
+
+def bookmarks_load(path=BOOKMARK_FILE):
     bkmarks = set()
     try:
         with open(path, 'r') as bkfile:
             for line in bkfile:
-                if _os.path.isfile(line):
-                    bkmarks.add(line.rstrip())
+                bkmarks.add(line.rstrip())
         # bkmarks = set(filter(None, bkmarks))
         # bkmarks = set(filter(_os.path.isfile, bkmarks))
     except FileNotFoundError:
@@ -166,12 +185,31 @@ def load_bookmarks(path=BOOKMARK_PATH):
         return bkmarks
 
 
-def bookmark_file(media_file, path=BOOKMARK_PATH):
+def bookmark_file(media_file, path=BOOKMARK_FILE):
     with open(path, 'a') as bkfile:
             bkfile.write('{}\n'.format(media_file))
 
 
-def clear_marks(path=BOOKMARK_PATH):
+def bookmark_files(files, path=BOOKMARK_FILE):
+    with open(path, 'a') as bkfile:
+        for file in files:
+            bkfile.write('{}\n'.format(file))
+
+
+def bookmark_remove(bookmark, path=BOOKMARK_FILE):
+    tmp_path, tmp_name = _os.path.split(path)
+    tmp_name = _os.path.splitext(tmp_name)[0] + '.tmp'
+    tmp_file = make_hidden(_os.path.join(tmp_path, tmp_name))
+    with open(path, 'r') as bkfile:
+        with open(tmp_file, 'r+') as tmpfile:
+            for line in bkfile:
+                if line.rstrip() != bookmark:
+                    tmpfile.write(line)
+    _os.remove(path)
+    _os.rename(tmp_file, path)
+
+
+def bookmark_clear_mark(path=BOOKMARK_FILE):
     with open(path, 'r+') as bkfile:
         bkfile.truncate()
 

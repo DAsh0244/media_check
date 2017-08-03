@@ -17,6 +17,7 @@ from urllib import request as urllib
 
 from interpreter import AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix
 from metadata import Metadata
+import _utils
 
 # constants
 HORIZ_LINE = 78 * '-'
@@ -37,16 +38,6 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         self.interactive = interact
         self.player = self.player_instance.media_player_new()
 
-        try:
-            file = next(self.file_list)
-            media = self.player_instance.media_new(file)
-            self.player.set_media(media)
-            self.metadata = Metadata(file)
-            self.timeout = self.metadata.length + .1
-            self._set_prompt(file)
-            self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
-        except StopIteration:
-            raise IOError('Empty file list provided.')
 
     def _set_timeout(self):
         self.timeout = self.metadata.length * (1 - self.player.get_position()) + .1
@@ -57,11 +48,21 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
             name = name[:27] + '...'
         self.prompt = '{} > '.format(name)
 
+    def get_file_from_player(self):
+        return urllib.unquote(self.player.get_media().get_mrl())[8:].replace('/', _os.sep)
+
     @staticmethod
     def emptyline():
         return False
 
     def preloop(self):
+        file = next(self.file_list)
+        media = self.player_instance.media_new(file)
+        self.player.set_media(media)
+        self.metadata = Metadata(file)
+        self.timeout = self.metadata.length + .1
+        self._set_prompt(file)
+        self.mdatashell = MetaDataShell(self.metadata, parent=self, view=True)
         self.player.play()
         file = urllib.unquote(self.player.get_media().get_mrl())[8:]
         md = self.metadata.get_audio_metadata(['artist', 'title'])
@@ -140,15 +141,25 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
                 self.player.set_position(calc_pos)
 
     def do_bookmark(self, *args):
-        pass
+        _utils.bookmark_file(self.get_file_from_player())
 
     def do_next_track(self, *args):
         self.next_track()
+
+    def do_remove_bookmark(self, bookmark):
+        if bookmark.strip() != '':
+            _utils.bookmark_remove(bookmark)
+        else:
+            _utils.bookmark_remove(self.get_file_from_player())
+
+    def do_help(self, arg):
+        super(AudioShell, self).do_help(arg)
 
     # internal masking:
     do_EOF = do_quit
 
     # aliased commmands
+    alias_h = do_help
     alias_d = do_delete
     alias_e = do_edit
     alias_q = do_quit
@@ -156,6 +167,8 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     alias_b = do_bookmark
     alias_n = do_next_track
     alias_next = do_next_track
+    alias_r = do_remove_bookmark
+    alias_remove = do_remove_bookmark
 
 
 class MetaDataShell(AliasCmdInterpreter, HideNoneDocMix):

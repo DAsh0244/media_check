@@ -30,14 +30,6 @@ def pairwise(iterable):
 
 
 class Metadata:
-    _edit_prompt = ('\n'
-                    'Enter fields in <field1>::<val>,, <field2>::<val>,,...\n'
-                    '(c)ancel to discard changes made\n'
-                    '(s)ave to save changes\n'
-                    '(v)iew to view current metadata state\n'
-                    '(q)uit to exit\n'
-                    )
-
     # list of some possible ID3 tags -- from mutagen's easyid3.py
     possible_tags = {"album",
                      "bpm",
