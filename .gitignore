@@ -217,4 +217,5 @@ $RECYCLE.BIN/
 
 # End of https://www.gitignore.io/api/vim,linux,python,pycharm,windows,notepadpp
 /ref/
-/vlc_analyze_bookmarks.txt
+/**/vlc_analyze_bookmarks.txt
+.idea/inspectionProfiles/

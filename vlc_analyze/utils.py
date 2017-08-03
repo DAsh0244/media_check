@@ -3,7 +3,7 @@
 # -*- coding: utf-8 -*-
 """
 vlc_check_audio
-_utils.py
+utils.py
 Author: Danyal Ahsanullah
 Date: 7/29/2017
 Copyright (c):  2017 Danyal Ahsanullah
@@ -11,7 +11,6 @@ License: N/A
 Description: 
 """
 
-import re as _re
 import os as _os
 import sys as _sys
 import time as _time
@@ -63,50 +62,54 @@ if _sys.platform.startswith('win'):
             byte_arr = bytearray()
         input_string = ''
         while True:
-            if kbhit():
-                char = getch()
-                if ord(char) in special_key_sig:  # if special key, get extra byte and merge
-                    tmp = getch()
-                    char = bytes(ord(char) + (ord(tmp) << 8))
-                if char == b'\r':  # enter_key
-                    input_string = str(byte_arr, 'utf-8')
-                    input_timeout.partial = b''
-                    break
-                elif char == b'\b':  # backspace_key
-                    try:
-                        byte_arr.pop()
-                        write_flush('\b  \b\b')
-                    except IndexError:
-                        pass
-                elif char == b'\t':
-                    try:
-                        phrase = str(byte_arr, 'utf-8')
-                        terms = []
-                        for idx in range(_sys.maxsize):
-                            term = completer.complete(phrase, idx)
-                            if term is None:
-                                break
-                            terms.append(term)
-                        if terms:
-                            if len(terms) == 1:
-                                partial = terms[0][len(phrase):]
-                                byte_arr.extend(bytearray(partial, 'utf-8'))
-                                write_flush(partial)
-                            else:
-                                complete_txt = '  '.join([term for term in terms])
-                                write_flush('\n' + complete_txt)
-                                input_timeout.partial = byte_arr
-                                break
-                    except Exception as e:
-                        print(e)
-                        pass
-                elif str(char, 'utf-8') in printable:  # printable character
-                    byte_arr.append(ord(char))
-                    write_flush(str(char, 'utf-8'))
+            try:
+                if kbhit():
+                    char = getch()
+                    if ord(char) in special_key_sig:  # if special key, get extra byte and merge
+                        tmp = getch()
+                        char = bytes(ord(char) + (ord(tmp) << 8))
+                    if char == b'\r':  # enter_key
+                        input_string = str(byte_arr, 'utf-8')
+                        input_timeout.partial = b''
+                        break
+                    elif char == b'\b':  # backspace_key
+                        try:
+                            byte_arr.pop()
+                            write_flush('\b  \b\b')
+                        except IndexError:
+                            pass
+                    elif char == b'\t':
+                        try:
+                            phrase = str(byte_arr, 'utf-8')
+                            terms = []
+                            for idx in range(_sys.maxsize):
+                                term = completer.complete(phrase, idx)
+                                if term is None:
+                                    break
+                                terms.append(term)
+                            if terms:
+                                if len(terms) == 1:
+                                    partial = terms[0][len(phrase):]
+                                    byte_arr.extend(bytearray(partial, 'utf-8'))
+                                    write_flush(partial)
+                                else:
+                                    complete_txt = '  '.join([term for term in terms])
+                                    write_flush('\n' + complete_txt)
+                                    input_timeout.partial = byte_arr
+                                    break
+                        except Exception as e:
+                            print(e)
+                            pass
+                    elif str(char, 'utf-8') in printable:  # printable character
+                        byte_arr.append(ord(char))
+                        write_flush(str(char, 'utf-8'))
 
-            if (_time.time() - start_time) > timeout:
-                stream.write(timeout_msg)
-                break
+                if (_time.time() - start_time) > timeout:
+                    stream.write(timeout_msg)
+                    break
+            except KeyboardInterrupt:
+                write_flush('\n')
+                _sys.exit(0)
 
         write_flush('\n')  # needed to move to next line
         if input_string:

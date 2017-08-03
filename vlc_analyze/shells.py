@@ -15,9 +15,10 @@ import vlc as _vlc
 import time as _time
 from urllib import request as urllib
 
-from interpreter import AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix
-from metadata import Metadata
-import _utils
+from . import utils
+from .interpreter import AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix
+
+from .metadata import Metadata
 
 # constants
 HORIZ_LINE = 78 * '-'
@@ -122,15 +123,15 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
 
     def do_bookmark(self, bookmark):
         if bookmark.strip() != '':
-            _utils.bookmark_file(bookmark)
+            utils.bookmark_file(bookmark)
         else:
-            _utils.bookmark_file(self.get_file_from_player())
+            utils.bookmark_file(self.get_file_from_player())
 
     def do_remove_bookmark(self, bookmark):
         if bookmark.strip() != '':
-            _utils.bookmark_remove(bookmark)
+            utils.bookmark_remove(bookmark)
         else:
-            _utils.bookmark_remove(self.get_file_from_player())
+            utils.bookmark_remove(self.get_file_from_player())
 
     def do_help(self, arg):
         super(AudioShell, self).do_help(arg)
@@ -336,8 +337,8 @@ if __name__ == '__main__':
     # f = open(os.devnull, 'w')
     # sys.stderr = f
     NUM_TRACKS = 100
-    src_dir = os.path.join(os.curdir, 'ref', 'music')
-    tmp_dir = os.path.join(os.curdir, 'ref', 'temp')
+    src_dir = os.path.join(os.pardir, 'ref', 'music')
+    tmp_dir = os.path.join(os.pardir, 'ref', 'temp')
     ext = 'mp3'
 
 

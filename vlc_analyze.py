@@ -14,91 +14,14 @@ __version__ = '.'.join(map(str, __version_info__))
 
 
 import os
-import vlc
 import sys
+import vlc
 import time
 from itertools import chain
-from collections import deque
 
-import _utils
-import metadata
-from shells import AudioShell
-
-
-# find the local copy of vlc.py from the cloned github repo
-# _VLCPATH = os.path.abspath(os.path.join(os.curdir,'vlc_python','generated'))
-# sys.path.append(_VLCPATH)
-# # del _VLCPATH
-# import vlc as _vlc
-
-
-def audio_file_edit(media_file):
-    _prompt = ('\n'
-               'press Ctrl-c to skip to next track.\n'
-               'press "e" to edit metadata.\n'
-               'press "d" to delete.\n'
-               'press "q" to quit immediately.\n'
-               'press "s <num>" to jump that many seconds (+/-) in the track. ("s" is +30s)\n'
-               'press "b" to bookmark the current track as the spot to startup on the next run\n'
-               )
-    try:
-        meta = metadata.Metadata(media_file)
-        md = meta.get_audio_metadata(['artist', 'title'])
-        print(78 * '-', '\nplaying: %s \nTitle: %s\nArtist: %s' % (os.path.basename(media_file), *md))
-        print('Path: {}'.format(os.path.abspath(media_file)))
-        p = vlc.MediaPlayer(media_file)
-        p.play()
-        time.sleep(.1)
-        while p.is_playing():
-            try:
-                raw_in = _utils.input_timeout(_prompt, timeout=(meta.length - .5))
-                choice = raw_in.rstrip()
-            except ValueError:
-                choice = ''
-            # print(choice + '\n')
-            try:
-                if choice == 'q':
-                    p.stop()
-                    sys.exit(0)
-                elif choice == 'd':
-                    if args.interact:
-                        confirm = input('Really delete? (y/n): ')
-                        if 'y' not in confirm.rstrip().lower():
-                            raise KeyboardInterrupt
-                    print('deleting media_file')
-                    p.stop()
-                    os.remove(media_file)
-                    raise KeyboardInterrupt
-                elif choice == 'e':
-                    meta.edit_meta_data()
-                elif 's' in choice:
-                    try:
-                        calc_pos = (float(choice[2:]) / meta.length) + p.get_position()
-                        if calc_pos > 1:
-                            p.set_position(0.999)
-                            p.stop()
-                            time.sleep(0.1)
-                        elif calc_pos < 0:
-                            p.set_position(0)
-                        else:
-                            p.set_position(calc_pos)
-                    except ValueError:
-                        # skip forward 30 seconds. equal to 's 30'
-                        p.set_position((30.0 / meta.length) + p.get_position())
-                elif choice == 'b':
-                    _utils.bookmark_file(media_file)
-            except (TypeError, UnicodeDecodeError):
-                pass
-            time.sleep(.1)
-            if p.get_position() > .997:
-                p.stop()
-        p.stop()
-        del p
-        return
-    except KeyboardInterrupt:
-        p.stop()
-        del p
-        return
+from vlc_analyze import utils
+from vlc_analyze.shells import AudioShell
+from vlc_analyze import metadata
 
 
 if __name__ == '__main__':
@@ -128,11 +51,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # print(vars(args))
     if args.clear:
-        _utils.bookmark_clear_mark()
+        utils.bookmark_clear_mark()
         sys.stdout.write('\nCleared Bookmarks!\n')
         sys.stdout.flush()
     else:
-        bookmarks = _utils.bookmarks_load()
+        bookmarks = utils.bookmarks_load()
         if bookmarks:
             for bookmark in bookmarks:
                 comm_path = os.path.commonprefix([BASE_PATH, bookmark])
@@ -151,8 +74,8 @@ if __name__ == '__main__':
         if os.path.isdir(path):
             sys.stdout.write('\nnow searching in: {} {}\n'.format(os.path.abspath(path), '(recursive)' if args.recursive else ''))
             sys.stdout.flush()
-            files = _utils.multiple_file_types(path, _utils.split_comma_str(args.extension),
-                                               recursion=args.recursive)
+            files = utils.multiple_file_types(path, utils.split_comma_str(args.extension),
+                                              recursion=args.recursive)
             shell = AudioShell(media_files=files, interact=args.interact)
             try:
                 while bookmarks:
@@ -165,7 +88,11 @@ if __name__ == '__main__':
                     except StopIteration:
                         break
             except NameError:
-                shell.cmdloop()
+                try:
+                    shell.cmdloop()
+                except (NameError, StopIteration):
+                    sys.stdout.write('No Files Found.\n')
+                    sys.stdout.flush()
         else:
             sys.stdout.write(path+'\n')
             sys.stdout.flush()

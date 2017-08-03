@@ -3,6 +3,7 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/vlc_analyze" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ref" />
     </content>
     <orderEntry type="inheritedJdk" />

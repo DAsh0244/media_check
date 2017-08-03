@@ -14,7 +14,8 @@ Description:
 """
 import os as _os
 from cmd import Cmd as _Cmd
-import _utils
+
+from vlc_analyze import utils
 
 
 # misc functions / decorators
@@ -166,10 +167,10 @@ class TimeoutInputMix(_Cmd):
                                 elif self.timeout:
                                     tout = self.timeout
 
-                                get_input = lambda prompt: _utils.input_timeout(caption=prompt, timeout=tout,
-                                                                                stream=self.stdout,
-                                                                                timeout_msg=timeout_msg)
-                            except:
+                                get_input = lambda prompt: utils.input_timeout(caption=prompt, timeout=tout,
+                                                                               stream=self.stdout,
+                                                                               timeout_msg=timeout_msg)
+                            except NameError:
                                 get_input = lambda prompt: input(prompt)
                             line = get_input(self.prompt)
                         except EOFError:
