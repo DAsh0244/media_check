@@ -65,12 +65,24 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
 
     # noinspection PyUnusedLocal
     def do_quit(self, *args):
+        """
+        Cleanup and close the shell.
+
+        Usage:
+        quit
+        """
         self.file_list = iter([])
         self.player.stop()
         self.player_instance.release()
 
     # noinspection PyUnusedLocal
     def do_next_track(self, *args):
+        """
+        Move onto the next track.
+
+        Usage:
+        next_track
+        """
         try:
             self.player.stop()
             file = next(self.file_list)
@@ -94,10 +106,23 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
 
     # noinspection PyUnusedLocal
     def do_edit(self, *args):
+        """
+        Open the metadata shell to edit and view the current track's metadata.
+
+        Usage:
+        edit
+        """
         self.mdatashell.cmdloop()
 
     # noinspection PyUnusedLocal
     def do_delete(self, *args):
+        """
+        Delete the current file begin played.
+        If shell was laughed in interactive mode, will prompt for a confirmation.
+
+        Usage:
+        delete
+        """
         self.player.stop()
         file_path = urllib.unquote(self.player.get_media().get_mrl())[8:]
         if self.interactive:
@@ -110,24 +135,53 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
             self.do_next_track()
 
     def do_skip(self, duration=''):
-            if not duration:
-                duration = 30.0
-            calc_pos = (float(duration) / self.metadata.length) + self.player.get_position()
-            if calc_pos > 1:
-                self.player.stop()
-                _time.sleep(0.1)
-            elif calc_pos < 0:
-                self.player.set_position(0)
-            else:
-                self.player.set_position(calc_pos)
+        """
+        Skip a number of seconds forwards or back in the current track.
+        Blank usage results in a +30 seconds skip.
+
+        Usage:
+        skip [seconds]
+
+        Options:
+        [seconds] -- number of seconds (+/-) to jump in the track. Defaults to 30 seconds.
+
+        """
+        if not duration:
+            duration = 30.0
+        calc_pos = (float(duration) / self.metadata.length) + self.player.get_position()
+        if calc_pos > 1:
+            self.player.stop()
+            _time.sleep(0.1)
+        elif calc_pos < 0:
+            self.player.set_position(0)
+        else:
+            self.player.set_position(calc_pos)
 
     def do_bookmark(self, bookmark):
+        """
+        Add file to bookmarks.
+
+        Usage:
+        bookmark [bookmark-file]
+
+        Options:
+        [bookmark-file] -- file to be added to bookmarks. Defaults to currently playing file.
+        """
         if bookmark.strip() != '':
             utils.bookmark_file(bookmark)
         else:
             utils.bookmark_file(self.get_file_from_player())
 
     def do_remove_bookmark(self, bookmark):
+        """
+        Remove currently bookmarked track from bookmarks file.
+
+        Usage:
+        remove_bookmark [bookmark-file]
+
+        Options:
+        [bookmark-file] -- file to be removed form bookmarks. Defaults to currently playing file.
+        """
         if bookmark.strip() != '':
             utils.bookmark_remove(bookmark)
         else:
@@ -135,6 +189,8 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
 
     def do_help(self, arg):
         """
+        Display help message for given topic/command if provided. Else print generic help menu.
+
         Usage:
         help [topic|command]
 
@@ -143,9 +199,11 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         """
         super(AudioShell, self).do_help(arg)
 
+    def do_EOF(self):
+        self.do_quit()
+
     # internal masking:
     preloop = do_next_track
-    do_EOF = do_quit
 
     # aliased commmands
     alias_h = do_help
