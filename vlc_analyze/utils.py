@@ -29,31 +29,60 @@ BOOKMARK_FILE = _os.path.join(BOOKMARK_PATH, BOOKMARK_FILENAME)
 if _sys.platform.startswith('win'):
     from msvcrt import getch, kbhit
     from string import printable as _printable
-
-    # import rlcompleter
-    # import readline
-
-    # old_completer = readline.get_completer()
-    # completer = rlcompleter.Completer()
-    # readline.set_completer(completer)
-    # readline.parse_and_bind("tab: complete")
-
-    BKSPCE_ONE_CHR = '\b  \b\b'
-    special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
-    arrow_keys = {'up': 18656,  # up arrow
-                  'down': 20704,  # down arrow
-                  'left': 19424,  # left arrow
-                  'right': 19936,  # right arrow
-                  }
-    # special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
-
     # todo: things to implement: delete/esc/arrow-key support,
     # http://help.adobe.com/en_US/AS2LCR/Flash_10.0/help.html?content=00000520.html
-    printable = _printable.replace('\t', '')
+    # Arrows:
+    # Left  0, 37
+    # Up    0, 38
+    # Right 0, 39
+    # Down  0, 40
+
+    # default system encoding
+    _encoding = _sys.getdefaultencoding()
+
+    # char listings
+    PRINTABLE = _printable.replace('\t', '')
+    BKSPCE_ONE_CHR = '\b  \b\b'
+
+    # special_key_sig = {0, 224}  # Special (arrows, f keys, ins, del, etc.) keys are started with one of these codes
+    # arrow_keys = {'left': 19424,   # left arrow
+    #               'up': 18656,     # up arrow
+    #               'right': 19936,  # right arrow
+    #               'down': 20704,   # down arrow
+    #               }
+
+    special_key_sig = {b'\0', b'\xe0'}  # Special keys (arrows, f keys, ins, del, etc.)
+    arrow_keys = {'left': b'\x4b',   # left arrow
+                  'up': b'\x48',     # up arrow
+                  'right': b'\x4d',  # right arrow
+                  'down': b'\x50',   # down arrow
+                  }
 
 
     def input_timeout(caption, timeout=5, default='', *_,
-                      stream=_sys.stdout, timeout_msg='\n ----- timed out', completer=None):
+                      stream=_sys.stdout, timeout_msg='\n ----- timed out', completer=None, encoding=_encoding):
+
+        if completer is None:
+            try:
+                import readline
+                import rlcompleter
+                input_timeout.old_completer = readline.get_completer()
+                completer = rlcompleter.Completer()
+                readline.set_completer(completer)
+                readline.parse_and_bind("tab: complete")
+                readline.parse_and_bind("up: previous-history")
+                readline.parse_and_bind("down: next-history")
+                readline.parse_and_bind("Return: accept-line ")
+            except ImportError:
+                pass
+        else:
+            try:
+                import readline
+                readline.parse_and_bind("up: previous-history")
+                readline.parse_and_bind("down: next-history")
+                readline.parse_and_bind("Return: accept-line ")
+            except ImportError:
+                pass
 
         def write_flush(string):
             stream.write(string)
@@ -66,7 +95,7 @@ if _sys.platform.startswith('win'):
             write_flush('{}({}):'.format(caption, default))
         try:
             byte_arr = bytearray(input_timeout.partial)
-            write_flush(str(input_timeout.partial, 'utf-8'))
+            write_flush(str(input_timeout.partial, encoding))
         except AttributeError:
             byte_arr = bytearray()
         input_string = ''
@@ -74,20 +103,35 @@ if _sys.platform.startswith('win'):
             try:
                 if kbhit():
                     char = getch()
-                    if ord(char) in special_key_sig:  # if special key, get extra byte and merge
-                        tmp = getch()
-                        char = ord(char) + (ord(tmp) << 8)
+                    if char in special_key_sig:  # if special key, get extra byte and merge
+                        # tmp = getch()
+                        # char = ord(char) + (ord(tmp) << 8)
+                        char = getch()
                     if char in arrow_keys.values():
+                        try:
+                            fake_keys = bytearray([224, 77, 224, 0x48])
+                            old_stdin = _sys.stdin
+                            _sys.stdin = fake_keys
+                            readline.get_line_buffer()
+                            _sys.stdin = old_stdin
+                        except Exception as e:
+                            # print(e)
+                            pass
+
                         if char == arrow_keys['up']:
                             try:
                                 write_flush(BKSPCE_ONE_CHR * len(byte_arr))
                                 byte_arr = bytearray(input_timeout.previous)
-                                write_flush(str(input_timeout.previous, 'utf-8'))
+                                write_flush(str(input_timeout.previous, encoding))
                                 # input_timeout.previous = b''
                             except AttributeError:
                                 pass
                     elif char == b'\r':  # enter_key
-                        input_string = str(byte_arr, 'utf-8')
+                        input_string = str(byte_arr, encoding)
+                        try:
+                            readline.add_history(input_string)
+                        except:
+                            pass
                         input_timeout.partial = b''
                         if input_string.strip():
                             input_timeout.previous = byte_arr
@@ -100,7 +144,7 @@ if _sys.platform.startswith('win'):
                             pass
                     elif char == b'\t':
                         try:
-                            phrase = str(byte_arr, 'utf-8')
+                            phrase = str(byte_arr, encoding)
                             terms = []
                             old_stdin = _sys.stdin
                             _sys.stdin = byte_arr
@@ -113,7 +157,7 @@ if _sys.platform.startswith('win'):
                             if terms:
                                 if len(terms) == 1:
                                     partial = terms[0][len(phrase):]
-                                    byte_arr.extend(bytearray(partial, 'utf-8'))
+                                    byte_arr.extend(bytearray(partial, encoding))
                                     write_flush(partial)
                                 else:
                                     complete_txt = '  '.join([term for term in terms])
@@ -123,9 +167,9 @@ if _sys.platform.startswith('win'):
                         except Exception as e:
                             print('\n', e, '\n')
                             pass
-                    elif str(char, 'utf-8') in printable:  # printable character
+                    elif str(char, encoding) in PRINTABLE:  # PRINTABLE character
                         byte_arr.append(ord(char))
-                        write_flush(str(char, 'utf-8'))
+                        write_flush(str(char, encoding))
 
                 if (_time.time() - start_time) > timeout:
                     stream.write(timeout_msg)
@@ -133,6 +177,12 @@ if _sys.platform.startswith('win'):
             except KeyboardInterrupt:
                 write_flush('\n')
                 _sys.exit(0)
+
+        try:
+            import readline
+            readline.set_completer(input_timeout.old_completer)
+        except (ImportError, AttributeError):
+            pass
 
         write_flush('\n')  # needed to move to next line
         if input_string:
