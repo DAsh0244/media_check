@@ -265,7 +265,7 @@ class TimeoutInputMix(_Cmd):
                                                                                    completer=self.complete)
                             except NameError:
                                 get_input = lambda prompt: input(prompt)
-                            line = get_input(self.prompt)
+                                line = get_input(self.prompt)
                         except EOFError:
                             line = 'EOF'
                     else:
