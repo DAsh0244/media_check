@@ -9,7 +9,7 @@ and play them with vlc player as well as edit each file's metadata
 """
 
 __author__ = 'Danyal Ahsanullah'
-__version_info__ = (0, 3, 3)
+__version_info__ = (0, 3, 4)
 __version__ = '.'.join(map(str, __version_info__))
 
 
@@ -90,7 +90,7 @@ if __name__ == '__main__':
             except NameError:
                 try:
                     shell.cmdloop()
-                except (NameError, StopIteration):
+                except (NameError, StopIteration) as e:
                     sys.stdout.write('No Files Found.\n')
                     sys.stdout.flush()
         else:

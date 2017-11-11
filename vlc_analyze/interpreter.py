@@ -263,6 +263,7 @@ class TimeoutInputMix(_Cmd):
                                                                                    stream=self.stdout,
                                                                                    timeout_msg=timeout_msg,
                                                                                    completer=self.complete)
+                                    line = get_input(self.prompt)
                             except NameError:
                                 get_input = lambda prompt: input(prompt)
                                 line = get_input(self.prompt)
