@@ -9,7 +9,7 @@ and play them with vlc player as well as edit each file's metadata
 """
 
 __author__ = 'Danyal Ahsanullah'
-__version_info__ = (0, 3, 4)
+__version_info__ = (0, 3, 5)
 __version__ = '.'.join(map(str, __version_info__))
 
 
@@ -22,7 +22,7 @@ from itertools import chain
 from vlc_analyze import utils
 from vlc_analyze.shells import AudioShell
 from vlc_analyze import metadata
-
+    
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -30,8 +30,8 @@ if __name__ == '__main__':
     parser = ArgumentParser('vlc_analyze')
     parser.add_argument('--version', '-V', action='version', version="%(prog)s " + __version__)
     parser.add_argument('path', type=str, nargs='*', help='path of file(s) to be read in.', default=os.curdir)
-    # parser.add_argument('--output', '-o', type=str,
-    #                     help='base directory to save results into. If the path given doesnt exist, it will be made.')
+    parser.add_argument('--output', '-o', type=str,
+                        help='base directory to save results into. If the path given doesnt exist, it will be made.')
     parser.add_argument('--extension', '-e', type=str, nargs='+',
                         help=('comma separated extension(s) to use for file(s) in directory provided\n'
                               'NOTE: As of now, only mp3 files support metadata editing'),
@@ -49,6 +49,7 @@ if __name__ == '__main__':
 
     BASE_PATH = os.getcwd()
     args = parser.parse_args()
+    os.makedirs(os.path.abspath(args.output),exist_ok=True)
     # print(vars(args))
     if args.clear:
         utils.bookmark_clear_mark()
@@ -74,9 +75,10 @@ if __name__ == '__main__':
         if os.path.isdir(path):
             sys.stdout.write('\nnow searching in: {} {}\n'.format(os.path.abspath(path), '(recursive)' if args.recursive else ''))
             sys.stdout.flush()
-            files = utils.multiple_file_types(path, utils.split_comma_str(args.extension),
-                                              recursion=args.recursive)
-            shell = AudioShell(media_files=files, interact=args.interact)
+            files = utils.search_through_dirs(path)
+            # files = utils.multiple_file_types(path, utils.split_comma_str(args.extension),
+                                            #   recursion=args.recursive)
+            shell = AudioShell(media_files=files, interact=args.interact, move_path=args.output)
             try:
                 while bookmarks:
                     try:

@@ -335,3 +335,17 @@ def multiple_file_types(path, patterns, recursion=False):
         files = (_glob.iglob(_os.path.abspath(_os.path.join(path, '*.{}'.format(pattern))))
                  for pattern in patterns)
     return _it.chain.from_iterable(files)
+
+
+def search_through_dirs(path):
+    # results = {}
+    for subdir,dirs,files in _os.walk(path):
+        try:
+            # print(subdir)
+            media = max(_glob.glob(_os.path.join(subdir,'*.mp3')),key=lambda x:_os.path.getsize(x))
+            # results[subdir]=(media,_os.path.getsize(media))
+            yield _os.path.abspath(media)
+        except ValueError:
+            pass
+            # print(subdir)
+    

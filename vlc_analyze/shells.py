@@ -14,6 +14,7 @@ import os as _os
 import vlc as _vlc
 import time as _time
 from urllib import request as urllib
+import shutil 
 
 from . import utils
 from .interpreter import AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix
@@ -31,9 +32,10 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     misc_header = 'Reference/help guides (type help/? <topic>):'
     undoc_header = None
 
-    def __init__(self, media_files, interact=False, *args, **kwargs):
+    def __init__(self, media_files, interact=False, move_path=None, *args, **kwargs):
         super(AudioShell, self).__init__(*args, **kwargs)
         self.file_list = iter(media_files)
+        self.move_path = move_path
         self.played_files = []
         self.player_instance = _vlc.Instance()
         self.interactive = interact
@@ -119,7 +121,7 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     def do_delete(self, *args):
         """
         Delete the current file begin played.
-        If shell was laughed in interactive mode, will prompt for a confirmation.
+        If shell was launched in interactive mode, will prompt for a confirmation.
 
         Usage:
         delete
@@ -201,6 +203,21 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
         # noinspection PyUnresolvedReferences
         super(AudioShell, self).do_help(arg)
 
+    def do_move(self,*args):
+        """
+        Copies the current file to the desired output directory
+
+        Usage:
+        move 
+        """
+        if self.move_path is not None:
+            file_path = urllib.unquote(self.player.get_media().get_mrl())[8:]
+            dirname = _os.path.basename(_os.path.dirname(file_path))
+            basename = _os.path.basename(file_path)
+            _os.makedirs(_os.path.abspath(_os.path.join(self.move_path,dirname)),exist_ok=True)
+            shutil.copy(file_path,_os.path.abspath(_os.path.join(self.move_path,dirname,basename)))
+
+
     # noinspection PyPep8Naming
     def do_EOF(self):
         self.do_quit()
@@ -217,9 +234,9 @@ class AudioShell(AliasCmdInterpreter, HideNoneDocMix, TimeoutInputMix):
     alias_b = do_bookmark
     alias_n = do_next_track
     alias_next = do_next_track
+    alias_m = do_move
     alias_r = do_remove_bookmark
     alias_remove = do_remove_bookmark
-
 
 class MetaDataShell(AliasCmdInterpreter, HideNoneDocMix):
     """
